@@ -1,0 +1,30 @@
+{
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "dev:web": "vite",
+    "build:web": "vite build"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^1.0.0-next.6",
+    "prettier": "^2.2.1",
+    "prettier-plugin-svelte": "^2.2.0",
+    "svelte": "^3.37.0",
+    "svelte-preprocess": "^4.7.0",
+    "tauri": "^0.14.1",
+    "vite": "^2.1.5"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "semi": false,
+    "singleQuote": true,
+    "htmlWhitespaceSensitivity": "strict",
+    "svelteSortOrder": "options-scripts-styles-markup",
+    "svelteStrictMode": false,
+    "svelteAllowShorthand": true,
+    "svelteBracketNewLine": false,
+    "svelteIndentScriptAndStyle": true
+  }
+}
