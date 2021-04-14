@@ -2,6 +2,8 @@
 
 [Bad Computer - Riddle](https://www.youtube.com/watch?v=ftshNCG_RPk)
 
+App for creating pivot tables for CSV
+
 ## Dev instructions
 
 1. Install Node.js (v14 works)

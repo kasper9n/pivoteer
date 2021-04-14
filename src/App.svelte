@@ -1,6 +1,7 @@
 <script>
   import * as tauri from 'tauri/api/tauri'
   import * as dialog from 'tauri/api/dialog'
+  import { emit, listen } from 'tauri/api/event'
 
   async function importCsv() {
     const filePath = await dialog.open({
@@ -12,28 +13,56 @@
       file_path: filePath,
     })
   }
+
+  let output = ''
+  listen('output', (e) => {
+    output = e.payload
+  })
+
+  let textarea
+  function selectAll(e) {
+    textarea.select()
+  }
 </script>
 
 <style lang="sass">
   main
     text-align: center
-    padding: 1em
-    max-width: 240px
+    padding: 30px
+    padding-top: 10px
     margin: 0 auto
+    height: 100%
+    box-sizing: border-box
+    display: flex
+    flex-direction: column
+  :global(html)
+    height: 100%
+    box-sizing: border-box
+    border-left: 1px solid rgba(#ffffff, 0.18)
+    border-right: 1px solid rgba(#ffffff, 0.18)
+    border-bottom: 1px solid rgba(#ffffff, 0.18)
+    border-radius: 0px 0px 5px 5px
+    overflow: hidden
   :global(body)
     margin: 0
     font-family: Arial, Helvetica, sans-serif
     font-size: 18px
-  @media (min-width: 640px)
-    main
-      max-width: none
+    background-color: #1B1B1B
+    color: white
+    height: 100%
+  textarea
+    display: block
+    margin-top: 10px
+    width: 100%
+    height: 100%
+    resize: none
+    box-sizing: border-box
 </style>
 
 <main>
-  <h1>Riddle</h1>
-  <button on:click={importCsv}>Import</button>
-  <p>
-    Visit the <a href="https://svelte.dev/tutorial" target="_blank">Svelte tutorial</a> to learn how
-    to build Svelte apps.
-  </p>
+  <div class="buttons">
+    <button on:click={importCsv}>Import</button>
+    <button on:click={selectAll}>Select all</button>
+  </div>
+  <textarea value={output} bind:this={textarea} />
 </main>
