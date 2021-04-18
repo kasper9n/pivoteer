@@ -38,10 +38,6 @@
   :global(html)
     height: 100%
     box-sizing: border-box
-    border-left: 1px solid rgba(#ffffff, 0.18)
-    border-right: 1px solid rgba(#ffffff, 0.18)
-    border-bottom: 1px solid rgba(#ffffff, 0.18)
-    border-radius: 0px 0px 5px 5px
     overflow: hidden
   :global(body)
     margin: 0

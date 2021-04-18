@@ -8,7 +8,7 @@ use csv;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Instant;
-use tauri;
+use tauri::{command, WindowUrl};
 
 fn get_cell<'a>(record: &'a csv::StringRecord, index: usize) -> Result<&'a str, String> {
   return match record.get(index) {
@@ -91,8 +91,6 @@ impl Aggregator {
   }
 }
 
-use tauri::command;
-
 #[command]
 pub fn import_csv(file_path: String) -> Result<String, String> {
   let start = Instant::now();
@@ -108,33 +106,38 @@ pub fn import_csv(file_path: String) -> Result<String, String> {
   return Ok(output);
 }
 
+// // Non-working code for emitting events from
 // #[command(with_window)]
 // pub fn import_csv<M: tauri::Params>(
 //   window: tauri::Window<M>,
 //   event: String,
 //   payload: Option<String>,
 // ) -> Result<(), String> {
-//   window
-//     .emit(&"output".into(), Some("test".to_owned()))
-//     .expect("failed to emit");
+//   window.emit_others(&"output".into(), Some("test".to_owned()));
+//   // window
+//   //   .emit(&"output".into(), Some("test".to_owned()))
+//   //   .expect("failed to emit");
 
 //   return Ok(());
 // }
 
 fn main() {
+  let mut ctx = tauri::generate_context!();
+  ctx.config.tauri.windows = Vec::new();
   tauri::Builder::default()
-    // .setup(|webview, _arg| {
-    //   webview.set_title("Riddle");
-    // })
-    // .invoke_handler(|webview, arg| -> Result<(), String> {
-    //   let command = match serde_json::from_str(arg) {
-    //     Err(e) => return Err(e.to_string()),
-    //     Ok(command) => command,
-    //   };
-    //   let mut webview = webview.as_mut();
-    //   handle_cmd(&mut webview, command)
-    // })
     .invoke_handler(tauri::generate_handler![import_csv])
-    .run(tauri::generate_context!())
+    .create_window("main".to_owned(), WindowUrl::default(), |mut webview| {
+      webview.resizable = true;
+      webview.title = "Riddle".to_string();
+      webview.always_on_top = false;
+      webview.width = 800.0;
+      webview.height = 600.0;
+      webview.min_width = Some(300.0);
+      webview.min_height = Some(150.0);
+      webview.fullscreen = false;
+      webview.skip_taskbar = false;
+      return webview;
+    })
+    .run(ctx)
     .expect("error while running tauri app");
 }
