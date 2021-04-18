@@ -1,7 +1,7 @@
 <script>
-  import * as tauri from 'tauri/api/tauri'
-  import * as dialog from 'tauri/api/dialog'
-  import { emit, listen } from 'tauri/api/event'
+  import * as tauri from '@tauri-apps/api/tauri'
+  import * as dialog from '@tauri-apps/api/dialog'
+  import { emit, listen } from '@tauri-apps/api/event'
 
   async function importCsv() {
     const filePath = await dialog.open({
