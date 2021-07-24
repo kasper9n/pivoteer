@@ -1,29 +1,37 @@
-<script>
-  import * as tauri from '@tauri-apps/api/tauri'
+<script lang="ts">
+  // import * as tauri from '@tauri-apps/api/tauri'
+  import { invoke } from '@tauri-apps/api/tauri'
   import * as dialog from '@tauri-apps/api/dialog'
   import { emit, listen } from '@tauri-apps/api/event'
 
+  let textbox = ''
   async function importCsv() {
     const filePath = await dialog.open({
-      filter: 'csv',
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
       multiple: false,
     })
-    tauri.invoke({
-      cmd: 'importCsv',
-      file_path: filePath,
-    })
+    try {
+      textbox = await invoke('import_csv', {
+        filePath: filePath,
+      })
+    } catch (e) {
+      console.error(e)
+    }
   }
 
-  let output = ''
-  listen('output', (e) => {
-    output = e.payload
-  })
-
-  let textarea
-  function selectAll(e) {
+  let textarea: HTMLTextAreaElement
+  function selectAll() {
     textarea.select()
   }
 </script>
+
+<main>
+  <div class="buttons">
+    <button on:click={importCsv}>Import</button>
+    <button on:click={selectAll}>Select all</button>
+  </div>
+  <textarea value={textbox} bind:this={textarea} />
+</main>
 
 <style lang="sass">
   main
@@ -54,11 +62,3 @@
     resize: none
     box-sizing: border-box
 </style>
-
-<main>
-  <div class="buttons">
-    <button on:click={importCsv}>Import</button>
-    <button on:click={selectAll}>Select all</button>
-  </div>
-  <textarea value={output} bind:this={textarea} />
-</main>

@@ -1,31 +1,32 @@
 [package]
-name = "riddle"
+name = "app"
 version = "0.1.0"
 description = "A Tauri App"
-authors = [ "you" ]
-license = ""
-repository = ""
-default-run = "riddle"
+default-run = "app"
 edition = "2018"
 build = "src/build.rs"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [build-dependencies]
-tauri-build = { version = "1.0.0-beta-rc.0" }
+tauri-build = { version = "1.0.0-beta.3" }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.0.0-beta-rc.0", features =["api-all"]}
-csv = "1.1.0"
+tauri = { version = "1.0.0-beta.5", features = ["api-all", "menu"] }
+# tauri = { git = "https://github.com/tauri-apps/tauri", rev = "e48bb3e", features = ["shell-execute", "shell-open", "dialog-open", "dialog-save"] }
+# tauri = { git = "https://github.com/tauri-apps/tauri", rev = "7eaf437", features = ["shell-execute", "shell-open", "menu", "dialog-open", "dialog-save"] }
+csv = "1.1.6"
 bigdecimal = "0.2.0"
-
-[target."cfg(windows)".build-dependencies]
-winres = "0.1"
 
 [features]
 default = [ "custom-protocol" ]
 custom-protocol = [ "tauri/custom-protocol" ]
 
-[[bin]]
-name = "riddle"
-path = "src/main.rs"
+[profile.dev]
+# speeds up incremental builds a lot. Should be default in a new Rust
+# version: https://github.com/rust-lang/cargo/pull/9298
+# https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
+split-debuginfo = "unpacked"
+# opt-level = 3

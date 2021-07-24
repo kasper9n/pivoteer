@@ -1,29 +1,33 @@
 {
   "private": true,
   "scripts": {
-    "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
     "dev:web": "vite",
-    "build:web": "vite build"
+    "tauri": "tauri",
+    "build": "tauri build",
+    "build:web": "vite build",
+    "preview": "vite preview",
+    "lint": "prettier --check *.js *.json src",
+    "format": "prettier --write *.js *.json src"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^1.0.0-next.6",
-    "@tauri-apps/api": "^1.0.0-beta-rc.1",
-    "@tauri-apps/cli": "^1.0.0-beta-rc.1",
-    "prettier": "^2.2.1",
-    "prettier-plugin-svelte": "^2.2.0",
-    "sass": "^1.32.10",
-    "svelte": "^3.37.0",
-    "svelte-preprocess": "^4.7.0",
-    "vite": "^2.1.5"
+    "@sveltejs/vite-plugin-svelte": "1.0.0-next.11",
+    "@tauri-apps/api": "1.0.0-beta.5",
+    "@tauri-apps/cli": "1.0.0-beta.6",
+    "prettier": "^2.3.2",
+    "prettier-plugin-svelte": "^2.3.1",
+    "sass": "^1.36.0",
+    "svelte": "^3.40.2",
+    "svelte-preprocess": "^4.7.4",
+    "typescript": "^4.3.5",
+    "vite": "^2.4.3"
   },
   "prettier": {
     "printWidth": 100,
     "semi": false,
     "singleQuote": true,
     "htmlWhitespaceSensitivity": "strict",
-    "svelteSortOrder": "options-scripts-styles-markup",
+    "svelteSortOrder": "options-scripts-markup-styles",
     "svelteStrictMode": false,
     "svelteAllowShorthand": true,
     "svelteBracketNewLine": false,
