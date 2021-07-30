@@ -2,47 +2,41 @@
   // import * as tauri from '@tauri-apps/api/tauri'
   import { invoke } from '@tauri-apps/api/tauri'
   import * as dialog from '@tauri-apps/api/dialog'
-  import { emit, listen } from '@tauri-apps/api/event'
+  import { event } from '@tauri-apps/api'
+  import { popup } from './scripts/helpers'
+  import { onDestroy } from 'svelte'
+  import type { Instance } from './scripts/instance'
+  import Main from './components/Main.svelte'
 
-  let textbox = ''
-  async function importCsv() {
-    const filePath = await dialog.open({
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
-      multiple: false,
-    })
-    try {
-      textbox = await invoke('import_csv', {
-        filePath: filePath,
-      })
-    } catch (e) {
-      console.error(e)
+  let currentInstance: Instance | null = null
+
+  async function newProject() {
+    // await invoke('new_project').then(() => {})
+    currentInstance = {
+      files: [],
     }
   }
 
-  let textarea: HTMLTextAreaElement
-  function selectAll() {
-    textarea.select()
-  }
+  const unlistenFuture = event.listen('menu', ({ payload }) => {
+    if (payload === 'New') {
+      newProject().catch(popup)
+    }
+  })
+  onDestroy(async () => {
+    const unlisten = await unlistenFuture
+    unlisten()
+  })
 </script>
 
-<main>
-  <div class="buttons">
-    <button on:click={importCsv}>Import</button>
-    <button on:click={selectAll}>Select all</button>
+{#if currentInstance}
+  <Main instance={currentInstance} />
+{:else}
+  <div class="start-page">
+    <button on:click={newProject}>New Instance</button>
   </div>
-  <textarea value={textbox} bind:this={textarea} />
-</main>
+{/if}
 
 <style lang="sass">
-  main
-    text-align: center
-    padding: 30px
-    padding-top: 10px
-    margin: 0 auto
-    height: 100%
-    box-sizing: border-box
-    display: flex
-    flex-direction: column
   :global(html)
     height: 100%
     box-sizing: border-box
@@ -51,14 +45,12 @@
     margin: 0
     font-family: Arial, Helvetica, sans-serif
     font-size: 18px
-    background-color: #1B1B1B
+    background-color: #191B20
     color: white
     height: 100%
-  textarea
-    display: block
-    margin-top: 10px
-    width: 100%
+  .start-page
+    display: flex
     height: 100%
-    resize: none
-    box-sizing: border-box
+    align-items: center
+    justify-content: center
 </style>
