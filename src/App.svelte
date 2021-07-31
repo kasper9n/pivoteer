@@ -1,20 +1,16 @@
 <script lang="ts">
   // import * as tauri from '@tauri-apps/api/tauri'
-  import { invoke } from '@tauri-apps/api/tauri'
-  import * as dialog from '@tauri-apps/api/dialog'
   import { event } from '@tauri-apps/api'
   import { popup } from './scripts/helpers'
   import { onDestroy } from 'svelte'
   import type { Instance } from './scripts/instance'
+  import { getDefaultInstance } from './scripts/instance'
   import Main from './components/Main.svelte'
 
   let currentInstance: Instance | null = null
 
   async function newProject() {
-    // await invoke('new_project').then(() => {})
-    currentInstance = {
-      files: [],
-    }
+    currentInstance = getDefaultInstance()
   }
 
   const unlistenFuture = event.listen('menu', ({ payload }) => {

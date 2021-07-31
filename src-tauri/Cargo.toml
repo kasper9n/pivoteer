@@ -1,8 +1,8 @@
 [package]
-name = "app"
+name = "riddle"
 version = "0.1.0"
 description = "A Tauri App"
-default-run = "app"
+default-run = "riddle"
 edition = "2018"
 build = "src/build.rs"
 
@@ -13,7 +13,7 @@ tauri-build = { version = "1.0.0-beta.3" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 # tauri = { version = "1.0.0-beta.6", features = ["api-all", "menu"] }
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "aa498e7", features = ["api-all", "menu"] }
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "c2b0fe1", features = ["api-all", "menu"] }
 csv = "1.1.6"
 bigdecimal = "0.2.0"
 
