@@ -1,34 +1,35 @@
 <script lang="ts">
-  import type { Instance } from 'src/scripts/instance'
+  import type { Project } from '../scripts/project'
   import ColumnOption from './ColumnOption.svelte'
 
-  export let instance: Instance
+  export let project: Project
   function addColumn() {
-    instance.columns.push({
-      action: 'unique',
-      idType: 'name',
+    project.columns.push({
+      action: 'Unique',
+      idType: 'Name',
       id: '',
     })
-    instance.columns = instance.columns
+    project.columns = project.columns
   }
   function removeColumn(index: number) {
-    instance.columns.splice(index, 1)
-    instance.columns = instance.columns
+    project.columns.splice(index, 1)
+    project.columns = project.columns
   }
 </script>
 
-<main>
+<div class="container">
   <div class="header">
-    Columns
+    <h3>Columns</h3>
     <button on:click={addColumn}>+</button>
   </div>
-  {#each instance.columns as column, i}
+  {#each project.columns as column, i}
     <ColumnOption {column} remove={() => removeColumn(i)} />
   {/each}
-</main>
+</div>
 
 <style lang="sass">
-  main
+  .container
     width: 100%
-    padding: 10px
+  .header
+    display: flex
 </style>

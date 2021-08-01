@@ -8,6 +8,13 @@ use tauri::{command, CustomMenuItem, Menu, MenuItem, Submenu, WindowBuilder, Win
 
 mod cmd;
 
+#[macro_export]
+macro_rules! throw {
+  ($($arg:tt)*) => {{
+    return Err(format!($($arg)*))
+  }};
+}
+
 fn custom_menu(name: &str) -> CustomMenuItem {
   let c = CustomMenuItem::new(name.to_string(), name);
   return c;
@@ -81,7 +88,7 @@ fn main() {
         .fullscreen(false);
       return (win, webview);
     })
-    .invoke_handler(tauri::generate_handler![error_popup, cmd::import_csv,])
+    .invoke_handler(tauri::generate_handler![error_popup, cmd::generate,])
     .menu(menu)
     .on_menu_event(|event| {
       let event_name = event.menu_item_id();

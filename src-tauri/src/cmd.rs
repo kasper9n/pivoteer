@@ -1,14 +1,45 @@
+use crate::throw;
 use bigdecimal::{BigDecimal, Zero};
 use csv;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Instant;
 use tauri::command;
 
+#[derive(Deserialize, Debug)]
+pub struct Project {
+  pub files: Vec<String>,
+  pub columns: Vec<Column>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+pub struct Column {
+  pub action: Action,
+  pub idType: IdType,
+  pub id: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum IdType {
+  Name,
+  Number,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug)]
+pub enum Action {
+  Unique,
+  Sum,
+}
+
 fn get_cell<'a>(record: &'a csv::StringRecord, index: usize) -> Result<&'a str, String> {
   return match record.get(index) {
     Some(cell) => Ok(cell),
-    None => Err(format!("No value found for cell {}", index)),
+    None => Err(format!(
+      "No value found for cell at column number {}",
+      index + 1
+    )),
   };
 }
 
@@ -20,61 +51,125 @@ fn str_to_dec<'a>(input: &'a str) -> Result<BigDecimal, String> {
 }
 
 struct Aggregator {
-  map: HashMap<Vec<String>, BigDecimal>,
+  map: HashMap<Vec<String>, Vec<BigDecimal>>,
+  columns: Vec<Column>,
 }
 
 impl Aggregator {
-  pub fn new() -> Self {
+  pub fn new(columns: Vec<Column>) -> Self {
     return Aggregator {
       map: HashMap::new(),
+      columns,
     };
   }
 
   pub fn add_csv(&mut self, file_path: String) -> Result<(), String> {
     let mut rdr = match csv::Reader::from_path(file_path) {
       Ok(reader) => reader,
-      Err(e) => return Err("Error opening csv: ".to_string() + &e.to_string()),
+      Err(e) => throw!("Error opening csv: {}", e.to_string()),
     };
+    let headers = match rdr.headers() {
+      Ok(headers) => headers,
+      Err(e) => throw!("Error reading headers: {}", e.to_string()),
+    };
+
+    #[derive(Debug)]
+    pub struct NumberedColumn {
+      pub action: Action,
+      pub index: usize,
+    }
+    let mut indexed_columns: Vec<NumberedColumn> = Vec::new();
+    let mut value_columns: Vec<NumberedColumn> = Vec::new();
+    for column in &self.columns {
+      let numbered_col = match column.idType {
+        IdType::Number => {
+          let index = match column.id.parse() {
+            Ok(0) | Err(_) => throw!("Invalid column number: {}", column.id),
+            Ok(num) => num - 1,
+          };
+          NumberedColumn {
+            action: column.action,
+            index,
+          }
+        }
+        IdType::Name => {
+          let index = match headers.iter().position(|s| s == &column.id) {
+            Some(index) => index,
+            None => throw!("No column found named {}", column.id),
+          };
+          NumberedColumn {
+            action: column.action,
+            index,
+          }
+        }
+      };
+      match column.action {
+        Action::Unique => indexed_columns.push(numbered_col),
+        Action::Sum => value_columns.push(numbered_col),
+      };
+    }
+
     let mut i = 0;
     for result in rdr.records() {
+      i += 1;
       let record: csv::StringRecord = match result {
         Ok(record) => record,
-        Err(e) => return Err("Error reading record: ".to_string() + &e.to_string()),
+        Err(e) => throw!("Error reading record: {}", e.to_string()),
       };
-      // let start_date = get_cell(&record, 0)?;
-      // let upc = get_cell(&record, 6)?;
-      // let isrc = get_cell(&record, 8)?;
-      // let value = str_to_dec(&get_cell(&record, 9)?)?; // quantity of sales or streams
-      let value = str_to_dec(&get_cell(&record, 11)?)?; // net earnings
-      let mut index = Vec::new();
-      index.push(get_cell(&record, 0)?.into()); // start date
-      index.push(get_cell(&record, 2)?.into()); // Store
-      index.push(get_cell(&record, 3)?.into()); // Store service
-      index.push(get_cell(&record, 8)?.into()); // isrc
-      index.push(get_cell(&record, 6)?.into()); // upc
-                                                // let store = get_cell(&record, 2)?;
-      let isrc = get_cell(&record, 8)?;
-      if isrc == "QM24S1832184" {
-        *self.map.entry(index).or_insert(BigDecimal::zero()) += value;
+
+      let mut indexes: Vec<String> = Vec::new();
+      for col in &indexed_columns {
+        match col.action {
+          Action::Unique => {
+            let cell = get_cell(&record, col.index)?.into();
+            indexes.push(cell);
+          }
+          _ => {}
+        }
+      }
+      let values = self.map.entry(indexes).or_insert(Vec::new());
+      let mut csvtotal = BigDecimal::zero();
+      for (vi, col) in value_columns.iter().enumerate() {
+        match col.action {
+          Action::Unique => {}
+          Action::Sum => {
+            let cell = get_cell(&record, col.index)?.into();
+            let value = str_to_dec(cell)?;
+            match values.get_mut(vi) {
+              Some(v) => {
+                csvtotal += value.clone();
+                *v += value;
+              }
+              None => values.push(value),
+            };
+          }
+        }
       }
       if i % 10000 == 0 {
         println!("{}", i);
-        // break;
       }
-      i += 1;
     }
     return Ok(());
   }
 
   pub fn output(&mut self) -> Result<String, String> {
     let mut wtr = csv::Writer::from_writer(Vec::new());
-    for (indexes, value) in &self.map {
+    for (indexes, values) in &self.map {
+      let mut indexes_iter = indexes.iter();
+      let mut values_iter = values.iter();
       let mut record = Vec::new();
-      for index in indexes {
-        record.push(index);
+      for column in &self.columns {
+        match column.action {
+          Action::Unique => match indexes_iter.next() {
+            Some(index_value) => record.push(index_value.clone()),
+            None => throw!("No value found for column to output"),
+          },
+          Action::Sum => match values_iter.next() {
+            Some(value) => record.push(value.to_string()),
+            None => throw!("No value found for column to output"),
+          },
+        }
       }
-      let value = value.to_string();
-      record.push(&value);
       match wtr.write_record(record) {
         Ok(_) => {}
         Err(e) => return Err(format!("Error writing record: {}", e)),
@@ -92,27 +187,14 @@ impl Aggregator {
   }
 }
 
-// // Non-working code for emitting events from
-// #[command(with_window)]
-// pub fn import_csv<M: tauri::Params>(
-//   window: tauri::Window<M>,
-//   event: String,
-//   payload: Option<String>,
-// ) -> Result<(), String> {
-//   window.emit_others("output".to_string(), Some("test".to_owned()));
-//   // window
-//   //   .emit(&"output".into(), Some("test".to_owned()))
-//   //   .expect("failed to emit");
-
-//   return Ok(());
-// }
-
 #[command]
-pub fn import_csv(file_path: String) -> Result<String, String> {
+pub async fn generate(project: Project) -> Result<String, String> {
   let start = Instant::now();
 
-  let mut agg = Aggregator::new();
-  agg.add_csv(file_path)?;
+  let mut agg = Aggregator::new(project.columns);
+  for file in project.files {
+    agg.add_csv(file)?;
+  }
   let output = agg.output()?;
   println!("{}", output);
 

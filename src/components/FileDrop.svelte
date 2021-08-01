@@ -5,7 +5,7 @@
   import { onMount } from 'svelte'
 
   let droppable = false
-  export let allowedFileExtensions: string[] = []
+  export let fileExtensions: string[] = []
   export let handleFiles: (files: string[]) => void
 
   // workaround for https://github.com/tauri-apps/tauri/issues/2323
@@ -15,7 +15,7 @@
   function getValidPaths(paths: string[]) {
     let validPaths = []
     for (const path of paths) {
-      for (const ext of allowedFileExtensions) {
+      for (const ext of fileExtensions) {
         if (path.endsWith('.' + ext)) {
           validPaths.push(path)
         }
