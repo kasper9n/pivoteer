@@ -4,6 +4,7 @@
   import { event } from '@tauri-apps/api'
   import { onMount } from 'svelte'
 
+  export let msg = 'Drop files'
   let droppable = false
   export let fileExtensions: string[] = []
   export let handleFiles: (files: string[]) => void
@@ -56,7 +57,7 @@
 {#if droppable}
   <!-- if the overlay is always visible, it's not possible to scroll while dragging tracks -->
   <div class="drag-overlay" transition:fade={{ duration: 100 }}>
-    <h1>Drop files to add</h1>
+    <h1>{msg}</h1>
   </div>
   <div class="dropzone" />
 {/if}
@@ -72,6 +73,6 @@
     display: flex
     align-items: center
     justify-content: center
-    background-color: rgba(#10161e, 0.9)
+    background-color: rgba(#ffffff, 0.8)
     transition: all 100ms ease-in-out
 </style>

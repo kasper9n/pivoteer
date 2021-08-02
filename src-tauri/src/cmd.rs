@@ -3,13 +3,19 @@ use bigdecimal::{BigDecimal, Zero};
 use csv;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Instant;
 use tauri::command;
 
 #[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
 pub struct Project {
   pub files: Vec<String>,
+  pub headerRowIndex: usize,
   pub columns: Vec<Column>,
 }
 
@@ -63,11 +69,25 @@ impl Aggregator {
     };
   }
 
-  pub fn add_csv(&mut self, file_path: String) -> Result<(), String> {
-    let mut rdr = match csv::Reader::from_path(file_path) {
-      Ok(reader) => reader,
+  pub fn add_csv(
+    &mut self,
+    file_path: String,
+    header_row_index: usize,
+  ) -> Result<BigDecimal, String> {
+    let filename = Path::new(&file_path).file_name().unwrap_or(OsStr::new(""));
+    let mut buf_reader = match File::open(file_path.clone()) {
+      Ok(file) => BufReader::new(file),
       Err(e) => throw!("Error opening csv: {}", e.to_string()),
     };
+    for _ in 0..header_row_index {
+      println!("Skipping...");
+      let mut s = "".to_string();
+      match buf_reader.read_line(&mut s) {
+        Ok(_) => {}
+        Err(e) => throw!("Error skipping pre-header rows: {}", e.to_string()),
+      }
+    }
+    let mut rdr = csv::Reader::from_reader(buf_reader);
     let headers = match rdr.headers() {
       Ok(headers) => headers,
       Err(e) => throw!("Error reading headers: {}", e.to_string()),
@@ -109,9 +129,10 @@ impl Aggregator {
       };
     }
 
-    let mut i = 0;
+    let mut _i = 0;
+    let mut csvtotal = BigDecimal::zero();
     for result in rdr.records() {
-      i += 1;
+      _i += 1;
       let record: csv::StringRecord = match result {
         Ok(record) => record,
         Err(e) => throw!("Error reading record: {}", e.to_string()),
@@ -128,7 +149,6 @@ impl Aggregator {
         }
       }
       let values = self.map.entry(indexes).or_insert(Vec::new());
-      let mut csvtotal = BigDecimal::zero();
       for (vi, col) in value_columns.iter().enumerate() {
         match col.action {
           Action::Unique => {}
@@ -145,15 +165,32 @@ impl Aggregator {
           }
         }
       }
-      if i % 10000 == 0 {
-        println!("{}", i);
-      }
+      // if i % 10000 == 0 {
+      //   progress bar
+      // }
     }
-    return Ok(());
+    println!(
+      "Sum of values: {} in {}",
+      csvtotal,
+      filename.to_string_lossy()
+    );
+    return Ok(csvtotal);
   }
 
   pub fn output(&mut self) -> Result<String, String> {
-    let mut wtr = csv::Writer::from_writer(Vec::new());
+    let mut wtr = csv::WriterBuilder::new()
+      .quote_style(csv::QuoteStyle::Always)
+      .from_writer(Vec::new());
+    {
+      let mut header = Vec::new();
+      for column in &self.columns {
+        header.push(column.id.clone());
+      }
+      match wtr.write_record(header) {
+        Ok(_) => {}
+        Err(e) => return Err(format!("Error writing header: {}", e)),
+      };
+    }
     for (indexes, values) in &self.map {
       let mut indexes_iter = indexes.iter();
       let mut values_iter = values.iter();
@@ -192,11 +229,13 @@ pub async fn generate(project: Project) -> Result<String, String> {
   let start = Instant::now();
 
   let mut agg = Aggregator::new(project.columns);
+  let mut sum_all = BigDecimal::zero();
   for file in project.files {
-    agg.add_csv(file)?;
+    let sum = agg.add_csv(file, project.headerRowIndex)?;
+    sum_all += sum;
   }
   let output = agg.output()?;
-  println!("{}", output);
+  println!("Sum of values, all files: {}", sum_all);
 
   let dur = Instant::now().duration_since(start).as_nanos() as f32;
   println!("\u{23f1}  {:.3}ms", dur / 1000.0 / 1000.0);

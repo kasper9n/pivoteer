@@ -6,7 +6,11 @@
   export let tableClass = ''
   export let tableRowClass = ''
   export let tableColumnClass = ''
-  $: rows = csv ? csv.split(csvRowDelimiter) : null
+  $: rows = (() => {
+    let rows = csv ? csv.split(csvRowDelimiter) : null
+    if (rows[rows.length - 1] === '') rows.pop()
+    return rows
+  })()
   $: table = rows ? rows.map((row, i) => row.split(csvColumnDelimiter)) : []
   $: header = hasHeader && table && table.length ? table[0] : null
   $: body = table && table.length ? (hasHeader ? table.slice(1, table.length) : table) : null
@@ -36,3 +40,16 @@
     </tbody>
   {/if}
 </table>
+
+<style lang="sass">
+  table
+    max-height: 100%
+    font-size: 14px
+    border-collapse: collapse
+    background-color: #FFFFFF
+  th, td
+    border: 1px solid #D1D7DD
+    padding: 6px 13px
+  tr:nth-child(2n)
+    background-color: #F6F8FA
+</style>

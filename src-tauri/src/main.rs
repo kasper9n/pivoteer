@@ -83,8 +83,8 @@ fn main() {
         .transparent(false)
         .decorations(true)
         .always_on_top(false)
-        .inner_size(800.0, 600.0)
-        .min_inner_size(400.0, 200.0)
+        .inner_size(750.0, 600.0)
+        .min_inner_size(730.0, 350.0)
         .fullscreen(false);
       return (win, webview);
     })

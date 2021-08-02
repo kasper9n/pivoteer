@@ -4,7 +4,6 @@
   import { popup } from '../scripts/helpers'
   import type { Project } from '../scripts/project'
   import CsvTable from './CsvTable.svelte'
-  import FileDrop from './FileDrop.svelte'
   import Options from './Options.svelte'
 
   export let project: Project
@@ -29,13 +28,17 @@
     }
   }
   let csv: string | null = null
+  let generating = false
   async function generate() {
+    if (generating) return
     try {
+      generating = true
       csv = await invoke('generate', { project })
     } catch (err) {
       popup(err)
       csv = null
     }
+    generating = false
   }
   function csvCopy() {
     if (csv === null) return
@@ -73,7 +76,9 @@
     </div>
   </div>
   <main>
-    <Options {project} />
+    <div class="options">
+      <Options {project} />
+    </div>
     <div class="output-header">
       <h3>Output</h3>
       <button on:click={generate}>Generate</button>
@@ -82,38 +87,53 @@
         <button on:click={csvSaveAs}>Save As...</button>
       {/if}
     </div>
-    {#if csv !== null}
-      <CsvTable {csv} />
-    {/if}
+    <div class="table">
+      {#if generating}
+        Generating...
+      {:else if csv !== null}
+        <CsvTable {csv} />
+      {/if}
+    </div>
   </main>
 </div>
-
-<FileDrop fileExtensions={['csv']} handleFiles={addFiles} />
 
 <style lang="sass">
   .container
     height: 100%
     display: flex
   .sidebar
-    min-width: 250px
+    width: 30%
+    max-width: 300px
     display: flex
     flex-direction: column
     height: 100%
+    padding: 0px 10px
     float: left
   .header
     padding: 10px
-    background-color: #303237
   .files
     overflow-y: auto
     padding: 5px 0px
     height: 100%
-    background-color: #25272B
+    margin-bottom: 10px
+    border: 1px solid #D1D7DD
     .file
       padding: 4px 10px
       font-size: 14px
   main
-    width: 100%
-    padding: 10px
+    display: flex
+    flex-direction: column
+    width: 10px
+    flex-grow: 1
+  .options
+    display: flex
+    flex-shrink: 0
   .output-header
     display: flex
+    flex-shrink: 0
+  .table
+    height: 20px
+    width: 100%
+    overflow: auto
+    flex-grow: 1
 </style>
