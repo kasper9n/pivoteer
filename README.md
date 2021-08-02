@@ -2,7 +2,7 @@
 
 [Bad Computer - Riddle](https://www.youtube.com/watch?v=ftshNCG_RPk)
 
-App for creating pivot tables for CSV
+App for creating pivot tables for CSV and TSV
 
 ## Dev instructions
 

@@ -47,7 +47,7 @@
   </div>
 {/if}
 
-<FileDrop fileExtensions={['csv']} handleFiles={addFiles} {msg} />
+<FileDrop fileExtensions={['csv', 'tsv']} handleFiles={addFiles} {msg} />
 
 <style lang="sass">
   :global(html)

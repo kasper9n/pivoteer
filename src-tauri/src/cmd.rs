@@ -74,7 +74,8 @@ impl Aggregator {
     file_path: String,
     header_row_index: usize,
   ) -> Result<BigDecimal, String> {
-    let filename = Path::new(&file_path).file_name().unwrap_or(OsStr::new(""));
+    let file_path = Path::new(&file_path);
+    let filename = file_path.file_name().unwrap_or(OsStr::new(""));
     let mut buf_reader = match File::open(file_path.clone()) {
       Ok(file) => BufReader::new(file),
       Err(e) => throw!("Error opening csv: {}", e.to_string()),
@@ -87,7 +88,15 @@ impl Aggregator {
         Err(e) => throw!("Error skipping pre-header rows: {}", e.to_string()),
       }
     }
-    let mut rdr = csv::Reader::from_reader(buf_reader);
+    let ext = file_path.extension().unwrap_or_default().to_string_lossy();
+    let delimiter = match ext.as_ref() {
+      "tsv" => b'\t',
+      "csv" => b',',
+      ext => throw!("Unsupported file extension {}", ext),
+    };
+    let mut rdr = csv::ReaderBuilder::new()
+      .delimiter(delimiter)
+      .from_reader(buf_reader);
     let headers = match rdr.headers() {
       Ok(headers) => headers,
       Err(e) => throw!("Error reading headers: {}", e.to_string()),

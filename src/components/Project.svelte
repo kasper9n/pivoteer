@@ -20,44 +20,47 @@
   }
   async function addFilesDialog() {
     const filePaths = await dialog.open({
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
+      filters: [
+        { name: 'CSV', extensions: ['csv'] },
+        { name: 'TSV', extensions: ['tsv'] },
+      ],
       multiple: true,
     })
     if (filePaths instanceof Array) {
       addFiles(filePaths)
     }
   }
-  let csv: string | null = null
+  let outputCsv: string | null = null
   let generating = false
   async function generate() {
     if (generating) return
     try {
       generating = true
-      csv = await invoke('generate', { project })
+      outputCsv = await invoke('generate', { project })
     } catch (err) {
       popup(err)
-      csv = null
+      outputCsv = null
     }
     generating = false
   }
   function csvCopy() {
-    if (csv === null) return
-    clipboard.writeText(csv)
+    if (outputCsv === null) return
+    clipboard.writeText(outputCsv)
   }
   async function csvSaveAs() {
     try {
-      if (csv === null) return
+      if (outputCsv === null) return
       const filePath = await dialog.save({
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       })
       if (!filePath) return
       await fs.writeFile({
         path: filePath,
-        contents: csv,
+        contents: outputCsv,
       })
     } catch (err) {
       popup(err)
-      csv = null
+      outputCsv = null
     }
   }
 </script>
@@ -65,7 +68,7 @@
 <div class="container">
   <div class="sidebar">
     <div class="header">
-      <button on:click={addFilesDialog}>Add CSVs</button>
+      <button on:click={addFilesDialog}>Add Files</button>
     </div>
     <div class="files">
       {#each project.files as file}
@@ -82,7 +85,7 @@
     <div class="output-header">
       <h3>Output</h3>
       <button on:click={generate}>Generate</button>
-      {#if csv !== null}
+      {#if outputCsv !== null}
         <button on:click={csvCopy}>Copy</button>
         <button on:click={csvSaveAs}>Save As...</button>
       {/if}
@@ -90,8 +93,8 @@
     <div class="table">
       {#if generating}
         Generating...
-      {:else if csv !== null}
-        <CsvTable {csv} />
+      {:else if outputCsv !== null}
+        <CsvTable csv={outputCsv} />
       {/if}
     </div>
   </main>
