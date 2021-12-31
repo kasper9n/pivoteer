@@ -46,7 +46,7 @@
     return extractUnlistener(unlisten)
   })
   onMount(() => {
-    const unlisten = event.listen('tauri://file-drop-cancelled', (e) => {
+    const unlisten = event.listen('tauri://file-drop-cancelled', () => {
       if (!readyToListen) return
       droppable = false
     })

@@ -11,7 +11,7 @@
     if (rows[rows.length - 1] === '') rows.pop()
     return rows
   })()
-  $: table = rows ? rows.map((row, i) => row.split(csvColumnDelimiter)) : []
+  $: table = rows ? rows.map((row) => row.split(csvColumnDelimiter)) : []
   $: header = hasHeader && table && table.length ? table[0] : null
   $: body = table && table.length ? (hasHeader ? table.slice(1, table.length) : table) : null
 </script>

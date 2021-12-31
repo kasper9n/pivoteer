@@ -38,7 +38,7 @@
       generating = true
       outputCsv = await invoke('generate', { project })
     } catch (err) {
-      popup(err)
+      popup(String(err))
       outputCsv = null
     }
     generating = false
@@ -59,7 +59,7 @@
         contents: outputCsv,
       })
     } catch (err) {
-      popup(err)
+      popup(String(err))
       outputCsv = null
     }
   }
@@ -73,7 +73,7 @@
     <div class="files">
       {#each project.files as file}
         <div class="file">
-          {file.replace(/^.*[\\\/]/, '')}
+          {file.replace(/^.*[\\/]/, '')}
         </div>
       {/each}
     </div>
