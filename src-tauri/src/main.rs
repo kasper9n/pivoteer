@@ -30,9 +30,9 @@ fn main() {
   let menu = Menu::new()
     .add_submenu(Submenu::new(
       // on macOS first menu is always app name
-      "Riddle",
+      &ctx.package_info().name,
       Menu::new()
-        .add_native_item(MenuItem::About("Riddle".to_string()))
+        .add_native_item(MenuItem::About(&ctx.package_info().name.clone()))
         .add_native_item(MenuItem::Separator)
         .add_native_item(MenuItem::Services)
         .add_native_item(MenuItem::Separator)
@@ -78,7 +78,7 @@ fn main() {
   tauri::Builder::default()
     .create_window("main".to_string(), WindowUrl::default(), |win, webview| {
       let win = win
-        .title("Riddle")
+        .title("Pivoteer")
         .resizable(true)
         .transparent(false)
         .decorations(true)

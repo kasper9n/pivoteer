@@ -1,8 +1,8 @@
 [package]
-name = "riddle"
+name = "pivoteer"
 version = "0.1.0"
 description = "A Tauri App"
-default-run = "riddle"
+default-run = "pivoteer"
 edition = "2018"
 build = "src/build.rs"
 
