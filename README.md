@@ -13,5 +13,5 @@ App for creating pivot tables for CSV and TSV
 ### Commands
 - `npm run dev`: Start app in dev mode
 - `npm run build`: Build
+- `npm run lint`: Lint
 - `npm run format`: Format
-- `npm run check`: Check code

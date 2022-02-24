@@ -7,15 +7,14 @@ edition = "2018"
 build = "src/build.rs"
 
 [build-dependencies]
-tauri-build = { version = "1.0.0-beta.3" }
+tauri-build = { version = "1.0.0-rc.3", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-# tauri = { version = "1.0.0-beta.6", features = ["api-all", "menu"] }
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "1eec728", features = ["shell-open"] }
+tauri = { version = "1.0.0-rc.3", features = ["dialog-open", "dialog-save", "shell-open"] }
 csv = "1.1.6"
-bigdecimal = "0.2.0"
+bigdecimal = "0.3.0"
 
 [features]
 default = [ "custom-protocol" ]

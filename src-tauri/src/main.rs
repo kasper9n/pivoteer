@@ -6,7 +6,8 @@
 use std::thread;
 use tauri::api::{dialog, shell};
 use tauri::{
-  command, CustomMenuItem, Menu, MenuEntry, MenuItem, Submenu, Window, WindowBuilder, WindowUrl,
+  command, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, Submenu, Window, WindowBuilder,
+  WindowUrl,
 };
 
 mod cmd;
@@ -20,7 +21,7 @@ macro_rules! throw {
 
 #[command]
 fn error_popup(msg: String, win: Window) {
-  eprintln!("Error: {}", msg);
+  println!("Error popup: {}", msg);
   thread::spawn(move || {
     dialog::message(Some(&win), "Error", msg);
   });
@@ -34,7 +35,6 @@ fn main() {
       let win = win
         .title("Pivoteer")
         .resizable(true)
-        .transparent(false)
         .decorations(true)
         .always_on_top(false)
         .inner_size(750.0, 600.0)
@@ -97,7 +97,8 @@ fn main() {
       event.window().emit("menu", event_name).unwrap();
       match event_name {
         "Learn More" => {
-          shell::open("https://youtu.be/dQw4w9WgXcQ".to_string(), None).unwrap();
+          let url = "https://youtu.be/dQw4w9WgXcQ".to_string();
+          shell::open(&event.window().shell_scope(), url, None).unwrap();
         }
         _ => {}
       }
