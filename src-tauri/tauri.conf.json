@@ -27,13 +27,11 @@
       "shortDescription": "",
       "longDescription": "",
       "deb": {
-        "depends": [],
-        "useBootstrapper": false
+        "depends": []
       },
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "",
-        "useBootstrapper": false,
         "exceptionDomain": "",
         "signingIdentity": null,
         "entitlements": null
@@ -48,6 +46,9 @@
       "active": false
     },
     "allowlist": {
+      "clipboard": {
+        "writeText": true
+      },
       "shell": {
         "open": true
       },
