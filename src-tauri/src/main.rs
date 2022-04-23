@@ -6,8 +6,8 @@
 use std::thread;
 use tauri::api::{dialog, shell};
 use tauri::{
-  command, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, Submenu, Window, WindowBuilder,
-  WindowUrl,
+  command, AboutMetadata, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, Submenu, Window,
+  WindowBuilder, WindowUrl,
 };
 
 mod cmd;
@@ -42,13 +42,14 @@ fn main() {
         .fullscreen(false);
       return (win, webview);
     })
+    .unwrap()
     .invoke_handler(tauri::generate_handler![error_popup, cmd::generate,])
     .menu(Menu::with_items([
       #[cfg(target_os = "macos")]
       MenuEntry::Submenu(Submenu::new(
         &ctx.package_info().name,
         Menu::with_items([
-          MenuItem::About(ctx.package_info().name.clone()).into(),
+          MenuItem::About(ctx.package_info().name.clone(), AboutMetadata::default()).into(),
           MenuItem::Separator.into(),
           MenuItem::Services.into(),
           MenuItem::Separator.into(),
