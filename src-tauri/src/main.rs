@@ -31,18 +31,19 @@ fn main() {
   let ctx = tauri::generate_context!();
 
   tauri::Builder::default()
-    .create_window("main".to_string(), WindowUrl::default(), |win, webview| {
-      let win = win
+    .setup(|app| {
+      let _ = WindowBuilder::new(app, "main", WindowUrl::default())
         .title("Pivoteer")
         .resizable(true)
         .decorations(true)
         .always_on_top(false)
         .inner_size(750.0, 600.0)
         .min_inner_size(730.0, 350.0)
-        .fullscreen(false);
-      return (win, webview);
+        .fullscreen(false)
+        .build()
+        .expect("Unable to create window");
+      Ok(())
     })
-    .unwrap()
     .invoke_handler(tauri::generate_handler![error_popup, cmd::generate,])
     .menu(Menu::with_items([
       #[cfg(target_os = "macos")]
