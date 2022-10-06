@@ -3,7 +3,7 @@
   import { onDestroy } from 'svelte'
   import type { Project } from './scripts/project'
   import { getDefaultProject } from './scripts/project'
-  import Main from './components/Project.svelte'
+  import ProjectComponent from './components/Project.svelte'
 
   let project: Project | null = null
 
@@ -23,7 +23,7 @@
 </script>
 
 {#if project}
-  <Main {project} />
+  <ProjectComponent {project} />
 {:else}
   <div class="start-page">
     <button on:click={newProject}>New Project</button>
