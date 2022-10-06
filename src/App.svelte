@@ -6,7 +6,7 @@
   import type { Project } from './scripts/project'
   import { getDefaultProject } from './scripts/project'
   import Main from './components/Project.svelte'
-  import FileDrop from './components/FileDrop.svelte'
+  import FileDrop from 'svelte-tauri-filedrop'
 
   let project: Project | null = null
 
@@ -47,7 +47,13 @@
   </div>
 {/if}
 
-<FileDrop fileExtensions={['csv', 'tsv']} handleFiles={addFiles} {msg} />
+<FileDrop extensions={['csv', 'tsv']} handleFiles={addFiles} let:files>
+  {#if files.length > 0}
+    <h1 class="dropzone" class:droppable={files.length > 0} transition:fade={{ duration: 80 }}>
+      Drop files to add
+    </h1>
+  {/if}
+</FileDrop>
 
 <style lang="sass">
   :global(html)
