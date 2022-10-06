@@ -42,9 +42,9 @@
   </aside>
   <main>
     {#if sourceIndex === null}
-      <Settings {project} />
+      <Settings bind:project />
     {:else if project.sources[sourceIndex]}
-      <Options source={project.sources[sourceIndex]} />
+      <Options bind:source={project.sources[sourceIndex]} />
     {/if}
   </main>
 </div>
@@ -82,7 +82,6 @@
     padding: 10px
   .fullbox
     overflow-y: auto
-    padding: 5px 0px
     height: 100%
     margin-bottom: 10px
     border: 1px solid #D1D7DD

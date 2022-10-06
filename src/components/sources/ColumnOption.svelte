@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { InputColumn } from '../../scripts/project'
+  import type { SourceColumn } from '../../scripts/project'
 
-  export let column: InputColumn
+  export let column: SourceColumn
   export let remove: () => void
   function uintFilterNonZero(value: string) {
     return value.replace(/0*[^0-9]*/g, '')
@@ -21,11 +21,6 @@
   {:else}
     <input type="text" bind:value={column.id} placeholder="1" />
   {/if}
-  Action:
-  <select bind:value={column.action}>
-    <option value="Unique">Keep unique values</option>
-    <option value="Sum">Sum</option>
-  </select>
   <button on:click={remove}>-</button>
 </div>
 

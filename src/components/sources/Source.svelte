@@ -56,9 +56,14 @@
   }
 </script>
 
-<h3>Source</h3>
-<button on:click={addFilesDialog}>Add files</button>
-<div class="box">
+<section>
+  <h2>Source</h2>
+</section>
+<section>
+  <div class="row">
+    <p>Name:</p>
+    <input type="text" bind:value={source.name} />
+  </div>
   <div class="row">
     <p>Header row number:</p>
     <input type="number" bind:value={headerRowNumber} placeholder="1" />
@@ -68,15 +73,18 @@
     <button on:click={addColumn}>+</button>
   </div>
   {#each source.columns as column, i}
-    <ColumnOption {column} remove={() => removeColumn(i)} />
+    <ColumnOption bind:column remove={() => removeColumn(i)} />
   {/each}
-</div>
-<h3>Files</h3>
-<div class="box">
+</section>
+<section>
+  <div class="row">
+    <h3>Files</h3>
+    <button on:click={addFilesDialog}>Add files</button>
+  </div>
   {#each source.files as file}
     <p>{file.replace(/^.*[\\/]/, '')}</p>
   {/each}
-</div>
+</section>
 
 <FileDrop extensions={['csv', 'tsv']} handleFiles={addFiles} let:files>
   {#if files.length > 0}
@@ -87,6 +95,8 @@
 </FileDrop>
 
 <style lang="sass">
+  section
+    margin: 10px 0px
   p
     margin: 0px
   .row
@@ -94,11 +104,9 @@
     align-items: center
   input
     margin-left: 5px
-    width: 35px
-  .box
-    border: 1px solid #D1D7DD
-    padding: 10px
-    display: block
+  input[type="number"]
+    margin-left: 5px
+    width: 40px
   .dropzone
     position: fixed
     width: 100%
