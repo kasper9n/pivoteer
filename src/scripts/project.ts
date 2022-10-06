@@ -1,22 +1,27 @@
+export function getDefaultProject(): Project {
+  return {
+    sources: [],
+    columns: [],
+  }
+}
+
 export type Project = {
+  sources: Source[]
+  columns: OutputColumn[]
+}
+
+export type Source = {
+  name: string
   files: string[]
   headerRowIndex: number
-  columns: Column[]
+  columns: InputColumn[]
 }
-export type Column = {
-  action: 'Unique' | 'Sum'
+export type InputColumn = {
   idType: 'Name' | 'Number'
   id: string
 }
 
-export function getDefaultProject(): Project {
-  return {
-    files: [],
-    headerRowIndex: 1,
-    columns: [
-      { action: 'Unique', idType: 'Name', id: 'ISRC' },
-      { action: 'Unique', idType: 'Name', id: 'UPC' },
-      { action: 'Sum', idType: 'Name', id: 'Net earnings (USD)' },
-    ],
-  }
+export type OutputColumn = {
+  name: string
+  action: 'Unique' | 'Sum'
 }

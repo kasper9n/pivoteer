@@ -13,7 +13,8 @@ use tauri::command;
 
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
-pub struct Project {
+pub struct Source {
+  pub name: String,
   pub files: Vec<String>,
   pub headerRowIndex: usize,
   pub columns: Vec<Column>,
@@ -234,13 +235,13 @@ impl Aggregator {
 }
 
 #[command]
-pub async fn generate(project: Project) -> Result<String, String> {
+pub async fn generate(source: Source) -> Result<String, String> {
   let start = Instant::now();
 
-  let mut agg = Aggregator::new(project.columns);
+  let mut agg = Aggregator::new(source.columns);
   let mut sum_all = BigDecimal::zero();
-  for file in project.files {
-    let sum = agg.add_csv(file, project.headerRowIndex)?;
+  for file in source.files {
+    let sum = agg.add_csv(file, source.headerRowIndex)?;
     sum_all += sum;
   }
   let output = agg.output()?;

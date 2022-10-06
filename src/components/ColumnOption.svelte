@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Column } from '../scripts/project'
+  import type { InputColumn } from '../scripts/project'
 
-  export let column: Column
+  export let column: InputColumn
   export let remove: () => void
   function uintFilterNonZero(value: string) {
     return value.replace(/0*[^0-9]*/g, '')

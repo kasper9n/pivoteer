@@ -1,32 +1,31 @@
 <script lang="ts">
-  import type { Project } from '../scripts/project'
+  import type { Source } from '../scripts/project'
   import ColumnOption from './ColumnOption.svelte'
 
-  export let project: Project
+  export let source: Source
   let headerRowNumber: number | null = 1
   $: {
     if (headerRowNumber === null) {
-      project.headerRowIndex = 1
+      source.headerRowIndex = 1
     } else {
       if (headerRowNumber < 1) {
         headerRowNumber = 1
       } else if (headerRowNumber % 1 !== 0) {
         headerRowNumber = Math.floor(headerRowNumber)
       }
-      project.headerRowIndex = headerRowNumber - 1
+      source.headerRowIndex = headerRowNumber - 1
     }
   }
   function addColumn() {
-    project.columns.push({
-      action: 'Unique',
+    source.columns.push({
       idType: 'Name',
       id: '',
     })
-    project.columns = project.columns
+    source.columns = source.columns
   }
   function removeColumn(index: number) {
-    project.columns.splice(index, 1)
-    project.columns = project.columns
+    source.columns.splice(index, 1)
+    source.columns = source.columns
   }
 </script>
 
@@ -41,8 +40,14 @@
       <p>Columns</p>
       <button on:click={addColumn}>+</button>
     </div>
-    {#each project.columns as column, i}
+    {#each source.columns as column, i}
       <ColumnOption {column} remove={() => removeColumn(i)} />
+    {/each}
+  </div>
+  <h3>Files</h3>
+  <div class="box">
+    {#each source.files as file}
+      <p>{file.replace(/^.*[\\/]/, '')}</p>
     {/each}
   </div>
 </div>
@@ -59,6 +64,5 @@
   .box
     border: 1px solid #D1D7DD
     padding: 10px
-    // display: flex
     display: block
 </style>

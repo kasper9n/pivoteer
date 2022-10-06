@@ -1,32 +1,15 @@
 <script lang="ts">
-  // import * as tauri from '@tauri-apps/api/tauri'
   import { event } from '@tauri-apps/api'
-  import { popup } from './scripts/helpers'
   import { onDestroy } from 'svelte'
   import type { Project } from './scripts/project'
   import { getDefaultProject } from './scripts/project'
   import Main from './components/Project.svelte'
-  import FileDrop from 'svelte-tauri-filedrop'
 
   let project: Project | null = null
 
   async function newProject() {
     project = getDefaultProject()
   }
-  async function addFiles(files: string[]) {
-    if (project === null) {
-      project = getDefaultProject()
-    }
-    for (const file of files) {
-      if (project.files.includes(file)) {
-        await popup('Skipping duplicate file: ' + file)
-      } else {
-        project.files.push(file)
-        project.files = project.files
-      }
-    }
-  }
-  $: msg = project === null ? 'Drop files to add in new project' : 'Drop files to add'
 
   const unlistenFuture = event.listen('menu', ({ payload }) => {
     if (payload === 'New') {
@@ -47,14 +30,6 @@
   </div>
 {/if}
 
-<FileDrop extensions={['csv', 'tsv']} handleFiles={addFiles} let:files>
-  {#if files.length > 0}
-    <h1 class="dropzone" class:droppable={files.length > 0} transition:fade={{ duration: 80 }}>
-      Drop files to add
-    </h1>
-  {/if}
-</FileDrop>
-
 <style lang="sass">
   :global(html)
     height: 100%
@@ -64,7 +39,9 @@
     margin: 0
     font-family: Arial, Helvetica, sans-serif
     font-size: 18px
-    background-color: #f8f9fc
+    background-color: #100711
+    background: linear-gradient(#42151E, #100711)
+    color: white
     height: 100%
   :global(h1), :global(h2), :global(h3)
     margin: 0px
@@ -76,4 +53,13 @@
     height: 100%
     align-items: center
     justify-content: center
+  button
+    font-size: 15px
+    padding: 8px 20px
+    border: none
+    border-radius: 5px
+    background-color: hsla(305, 41%, 38%, 0.3)
+    color: white
+    &:hover
+      background-color: hsla(305, 41%, 38%, 0.5)
 </style>

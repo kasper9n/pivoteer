@@ -2,19 +2,42 @@
   import { dialog, invoke, fs } from '@tauri-apps/api'
   import * as clipboard from '@tauri-apps/api/clipboard'
   import { popup } from '../scripts/helpers'
-  import type { Project } from '../scripts/project'
+  import type { Project, Source } from '../scripts/project'
   import CsvTable from './CsvTable.svelte'
+  import FileDrop from 'svelte-tauri-filedrop'
+  import Modal from './Modal.svelte'
   import Options from './Options.svelte'
+  import { fade } from 'svelte/transition'
 
   export let project: Project
+  export let sourceIndex = 0
+
+  let newSourceName: string | null = null
+  function addSource() {
+    if (newSourceName) {
+      const newSource: Source = {
+        name: newSourceName,
+        columns: [],
+        files: [],
+        headerRowIndex: 0,
+      }
+      project.sources = [...project.sources, newSource]
+      sourceIndex = project.sources.length - 1
+    }
+    newSourceName = null
+  }
 
   async function addFiles(files: string[]) {
+    if (!project.sources[sourceIndex]) {
+      return
+    }
+    const source = project.sources[sourceIndex]
     for (const file of files) {
-      if (project.files.includes(file)) {
+      if (source.files.includes(file)) {
         await popup('Skipping duplicate file: ' + file)
       } else {
-        project.files.push(file)
-        project.files = project.files
+        source.files.push(file)
+        project.sources[sourceIndex].files = project.sources[sourceIndex].files
       }
     }
   }
@@ -33,10 +56,12 @@
   let outputCsv: string | null = null
   let generating = false
   async function generate() {
-    if (generating) return
+    if (generating || !project.sources[sourceIndex]) {
+      return
+    }
     try {
       generating = true
-      outputCsv = await invoke('generate', { project })
+      outputCsv = await invoke('generate', { source: project.sources[sourceIndex] })
     } catch (err) {
       popup(String(err))
       outputCsv = null
@@ -66,22 +91,25 @@
 </script>
 
 <div class="container">
-  <div class="sidebar">
+  <aside>
     <div class="header">
-      <button on:click={addFilesDialog}>Add Files</button>
+      <button on:click={() => (newSourceName = '')}>New Source</button>
     </div>
     <div class="files">
-      {#each project.files as file}
-        <div class="file">
-          {file.replace(/^.*[\\/]/, '')}
+      {#each project.sources as source, i}
+        <div class="file" class:active={i === sourceIndex} on:click={() => (sourceIndex = i)}>
+          {source.name}
         </div>
       {/each}
     </div>
-  </div>
+  </aside>
   <main>
-    <div class="options">
-      <Options {project} />
-    </div>
+    {#if project.sources[sourceIndex]}
+      <button on:click={addFilesDialog}>Add files</button>
+      <div class="options">
+        <Options source={project.sources[sourceIndex]} />
+      </div>
+    {/if}
     <div class="output-header">
       <h3>Output</h3>
       <button on:click={generate}>Generate</button>
@@ -100,11 +128,36 @@
   </main>
 </div>
 
+<Modal
+  showIf={newSourceName !== null}
+  onClose={() => {
+    newSourceName = null
+  }}
+>
+  <form on:submit|preventDefault={addSource}>
+    <h3>New Source</h3>
+    Name
+    <input type="text" bind:value={newSourceName} />
+    <div>
+      <button type="button" on:click={() => (newSourceName = null)}>Cancel</button>
+      <button type="submit" on:click={addSource}>Add</button>
+    </div>
+  </form>
+</Modal>
+
+<FileDrop extensions={['csv', 'tsv']} handleFiles={addFiles} let:files>
+  {#if files.length > 0}
+    <h1 class="dropzone" class:droppable={files.length > 0} transition:fade={{ duration: 80 }}>
+      Drop files to add
+    </h1>
+  {/if}
+</FileDrop>
+
 <style lang="sass">
   .container
     height: 100%
     display: flex
-  .sidebar
+  aside
     width: 30%
     max-width: 300px
     display: flex
@@ -123,6 +176,9 @@
     .file
       padding: 4px 10px
       font-size: 14px
+      cursor: default
+      &.active
+        background-color: hsla(0, 0%, 100%, 0.1)
   main
     display: flex
     flex-direction: column
@@ -139,4 +195,15 @@
     width: 100%
     overflow: auto
     flex-grow: 1
+  .dropzone
+    position: fixed
+    width: 100%
+    height: 100%
+    top: 0px
+    left: 0px
+    display: flex
+    align-items: center
+    justify-content: center
+    background-color: rgba(#000000, 0.4)
+    text-shadow: 0px 0px 30px #000000
 </style>
