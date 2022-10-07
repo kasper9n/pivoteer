@@ -2,7 +2,7 @@
   import { popup } from '../../scripts/helpers'
   import FileDrop from 'svelte-tauri-filedrop'
   import { dialog } from '@tauri-apps/api'
-  import type { Source } from '../../scripts/project'
+  import type { Source } from '../../bindings'
   import ColumnOption from './ColumnOption.svelte'
   import { fade } from 'svelte/transition'
 

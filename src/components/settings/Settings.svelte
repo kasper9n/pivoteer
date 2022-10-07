@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Project } from '../../scripts/project'
+  import type { Project } from '../../bindings'
   import OutputColumn from './OutputColumn.svelte'
 
   export let project: Project
@@ -8,6 +8,8 @@
     project.columns.push({
       name: '',
       action: 'Unique',
+      enabled: true,
+      kind: 'Isrc',
     })
     project.columns = project.columns
   }

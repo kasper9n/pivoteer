@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Column } from '../../scripts/project'
+  import type { Column } from '../../bindings'
 
   export let column: Column
   export let remove: () => void

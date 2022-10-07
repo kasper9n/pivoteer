@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Project, Source } from '../scripts/project'
+  import type { Project, Source } from '../bindings'
   import Modal from './Modal.svelte'
   import Options from './sources/Source.svelte'
   import Settings from './settings/Settings.svelte'

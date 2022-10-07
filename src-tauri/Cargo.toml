@@ -3,7 +3,7 @@ name = "pivoteer"
 version = "0.1.0"
 description = "A Tauri App"
 default-run = "pivoteer"
-edition = "2018"
+edition = "2021"
 build = "src/build.rs"
 
 [build-dependencies]
@@ -15,6 +15,8 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.1", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open"] }
 csv = "1.1"
 bigdecimal = "0.3"
+ts-rs = "6.1"
+typescript-type-def = "0.5"
 
 [features]
 default = [ "custom-protocol" ]

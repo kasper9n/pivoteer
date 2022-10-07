@@ -10,7 +10,9 @@ use tauri::{
   WindowBuilder, WindowUrl,
 };
 
+mod adapters;
 mod cmd;
+mod project;
 
 #[macro_export]
 macro_rules! throw {
@@ -28,6 +30,9 @@ fn error_popup(msg: String, win: Window) {
 }
 
 fn main() {
+  #[cfg(debug_assertions)]
+  project::typegen();
+
   let ctx = tauri::generate_context!();
 
   tauri::Builder::default()

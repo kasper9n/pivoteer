@@ -1,44 +1,15 @@
+use crate::adapters::Adapter;
+use crate::project::{Action, Column, Project};
 use crate::throw;
-use bigdecimal::{BigDecimal, Zero};
-use csv;
-use serde::Deserialize;
+use bigdecimal::BigDecimal;
+use csv::{self, Reader, StringRecord};
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Instant;
 use tauri::command;
-
-#[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
-pub struct Source {
-  pub name: String,
-  pub files: Vec<String>,
-  pub headerRowIndex: usize,
-  pub columns: Vec<Column>,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
-pub struct Column {
-  pub action: Action,
-  pub idType: IdType,
-  pub id: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub enum IdType {
-  Name,
-  Number,
-}
-
-#[derive(Deserialize, Clone, Copy, Debug)]
-pub enum Action {
-  Unique,
-  Sum,
-}
 
 fn get_cell<'a>(record: &'a csv::StringRecord, index: usize) -> Result<&'a str, String> {
   return match record.get(index) {
@@ -57,6 +28,68 @@ fn str_to_dec<'a>(input: &'a str) -> Result<BigDecimal, String> {
   };
 }
 
+fn read_csv(file_path: &Path, header_row_index: usize) -> Result<Reader<BufReader<File>>, String> {
+  let mut buf_reader = match File::open(file_path.clone()) {
+    Ok(file) => BufReader::new(file),
+    Err(e) => throw!("Error opening csv: {}", e.to_string()),
+  };
+  for i in 0..header_row_index {
+    println!("Skipping row index {i}");
+    let mut s = "".to_string();
+    match buf_reader.read_line(&mut s) {
+      Ok(_) => {}
+      Err(e) => throw!("Error skipping pre-header rows: {}", e.to_string()),
+    }
+  }
+  let ext = file_path.extension().unwrap_or_default().to_string_lossy();
+  let delimiter = match ext.as_ref() {
+    "tsv" => b'\t',
+    "csv" => b',',
+    ext => throw!("Unsupported file extension {}", ext),
+  };
+  let rdr = csv::ReaderBuilder::new()
+    .delimiter(delimiter)
+    .from_reader(buf_reader);
+  Ok(rdr)
+}
+
+pub enum ColumnLocation<'a> {
+  Name(&'a str),
+  Index(usize),
+  NameAtIndex(&'a str, usize),
+}
+impl ColumnLocation<'_> {
+  pub fn find(&self, headers: &StringRecord) -> Result<usize, String> {
+    match self {
+      ColumnLocation::Name(name) => {
+        let index = headers.iter().position(|s| s == *name);
+        index.ok_or(format!("No column named {name}"))
+      }
+      ColumnLocation::Index(index) => {
+        headers
+          .get(*index)
+          .ok_or(format!("No column number {}", index + 1))?;
+        Ok(*index)
+      }
+      ColumnLocation::NameAtIndex(name, index) => {
+        let actual_name = headers
+          .get(*index)
+          .ok_or(format!("No column number {}", index + 1))?;
+        if actual_name != *name {
+          throw!("No column number {} named {}", index + 1, name);
+        }
+        Ok(*index)
+      }
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct FoundColumn {
+  pub action: Action,
+  pub index: usize,
+}
+
 struct Aggregator {
   map: HashMap<Vec<String>, Vec<BigDecimal>>,
   columns: Vec<Column>,
@@ -70,137 +103,85 @@ impl Aggregator {
     };
   }
 
-  pub fn add_csv(
+  pub fn add_csv_record(
     &mut self,
-    file_path: String,
-    header_row_index: usize,
-  ) -> Result<BigDecimal, String> {
-    let file_path = Path::new(&file_path);
-    let filename = file_path.file_name().unwrap_or(OsStr::new(""));
-    let mut buf_reader = match File::open(file_path.clone()) {
-      Ok(file) => BufReader::new(file),
-      Err(e) => throw!("Error opening csv: {}", e.to_string()),
-    };
-    for _ in 0..header_row_index {
-      println!("Skipping...");
-      let mut s = "".to_string();
-      match buf_reader.read_line(&mut s) {
-        Ok(_) => {}
-        Err(e) => throw!("Error skipping pre-header rows: {}", e.to_string()),
+    record: &csv::StringRecord,
+    key_cols: &Vec<FoundColumn>,
+    value_cols: &Vec<FoundColumn>,
+  ) -> Result<(), String> {
+    let mut keys: Vec<String> = Vec::new();
+    for key_col in key_cols {
+      let cell = get_cell(&record, key_col.index)?.to_owned();
+      keys.push(cell);
+    }
+
+    let values = self.map.entry(keys).or_insert(Vec::new());
+    for (i, col) in value_cols.iter().enumerate() {
+      match col.action {
+        Action::Unique => {}
+        Action::Sum => {
+          let cell = get_cell(&record, col.index)?.into();
+          let value = str_to_dec(cell)?;
+          match values.get_mut(i) {
+            Some(v) => {
+              *v += value;
+            }
+            None => values.push(value),
+          };
+        }
       }
     }
-    let ext = file_path.extension().unwrap_or_default().to_string_lossy();
-    let delimiter = match ext.as_ref() {
-      "tsv" => b'\t',
-      "csv" => b',',
-      ext => throw!("Unsupported file extension {}", ext),
-    };
-    let mut rdr = csv::ReaderBuilder::new()
-      .delimiter(delimiter)
-      .from_reader(buf_reader);
+    Ok(())
+  }
+
+  pub fn add_csv(&mut self, file_path: String, adapter: &impl Adapter) -> Result<(), String> {
+    let file_path = Path::new(&file_path);
+    let mut rdr = read_csv(file_path, adapter.header_row_index())?;
     let headers = match rdr.headers() {
       Ok(headers) => headers,
       Err(e) => throw!("Error reading headers: {}", e.to_string()),
     };
 
-    #[derive(Debug)]
-    pub struct NumberedColumn {
-      pub action: Action,
-      pub index: usize,
-    }
-    let mut indexed_columns: Vec<NumberedColumn> = Vec::new();
-    let mut value_columns: Vec<NumberedColumn> = Vec::new();
+    let mut key_cols = Vec::new();
+    let mut value_cols = Vec::new();
     for column in &self.columns {
-      let numbered_col = match column.idType {
-        IdType::Number => {
-          let index = match column.id.parse() {
-            Ok(0) | Err(_) => throw!("Invalid column number: {}", column.id),
-            Ok(num) => num - 1,
-          };
-          NumberedColumn {
-            action: column.action,
-            index,
-          }
-        }
-        IdType::Name => {
-          let index = match headers.iter().position(|s| s == &column.id) {
-            Some(index) => index,
-            None => throw!("No column found named {}", column.id),
-          };
-          NumberedColumn {
-            action: column.action,
-            index,
-          }
-        }
+      if !column.enabled {
+        continue;
+      }
+      let found_col = FoundColumn {
+        action: column.action,
+        index: adapter.column_location(&column.kind).find(headers)?,
       };
       match column.action {
-        Action::Unique => indexed_columns.push(numbered_col),
-        Action::Sum => value_columns.push(numbered_col),
+        Action::Unique => key_cols.push(found_col),
+        _ => value_cols.push(found_col),
       };
     }
 
-    let mut _i = 0;
-    let mut csvtotal = BigDecimal::zero();
-    for result in rdr.records() {
-      _i += 1;
-      let record: csv::StringRecord = match result {
+    for record_result in rdr.into_records() {
+      let record: csv::StringRecord = match record_result {
         Ok(record) => record,
         Err(e) => throw!("Error reading record: {}", e.to_string()),
       };
-
-      let mut indexes: Vec<String> = Vec::new();
-      for col in &indexed_columns {
-        match col.action {
-          Action::Unique => {
-            let cell = get_cell(&record, col.index)?.into();
-            indexes.push(cell);
-          }
-          _ => {}
-        }
-      }
-      let values = self.map.entry(indexes).or_insert(Vec::new());
-      for (vi, col) in value_columns.iter().enumerate() {
-        match col.action {
-          Action::Unique => {}
-          Action::Sum => {
-            let cell = get_cell(&record, col.index)?.into();
-            let value = str_to_dec(cell)?;
-            match values.get_mut(vi) {
-              Some(v) => {
-                csvtotal += value.clone();
-                *v += value;
-              }
-              None => values.push(value),
-            };
-          }
-        }
-      }
-      // if i % 10000 == 0 {
-      //   progress bar
-      // }
+      self.add_csv_record(&record, &key_cols, &value_cols)?;
     }
-    println!(
-      "Sum of values: {} in {}",
-      csvtotal,
-      filename.to_string_lossy()
-    );
-    return Ok(csvtotal);
+    Ok(())
   }
 
   pub fn output(&mut self) -> Result<String, String> {
     let mut wtr = csv::WriterBuilder::new()
       .quote_style(csv::QuoteStyle::Always)
       .from_writer(Vec::new());
-    {
-      let mut header = Vec::new();
-      for column in &self.columns {
-        header.push(column.id.clone());
-      }
-      match wtr.write_record(header) {
-        Ok(_) => {}
-        Err(e) => return Err(format!("Error writing header: {}", e)),
-      };
+
+    let mut header = Vec::new();
+    for column in &self.columns {
+      header.push(column.name.clone());
     }
+    match wtr.write_record(header) {
+      Ok(_) => {}
+      Err(e) => return Err(format!("Error writing header: {}", e)),
+    };
+
     for (indexes, values) in &self.map {
       let mut indexes_iter = indexes.iter();
       let mut values_iter = values.iter();
@@ -235,17 +216,17 @@ impl Aggregator {
 }
 
 #[command]
-pub async fn generate(source: Source) -> Result<String, String> {
+pub async fn generate(project: Project) -> Result<String, String> {
   let start = Instant::now();
 
-  let mut agg = Aggregator::new(source.columns);
-  let mut sum_all = BigDecimal::zero();
-  for file in source.files {
-    let sum = agg.add_csv(file, source.headerRowIndex)?;
-    sum_all += sum;
+  let mut aggregator = Aggregator::new(project.columns);
+  for source in project.sources {
+    let adapter = source.source_type.adapter();
+    for file in source.files {
+      aggregator.add_csv(file, &adapter)?;
+    }
   }
-  let output = agg.output()?;
-  println!("Sum of values, all files: {}", sum_all);
+  let output = aggregator.output()?;
 
   let dur = Instant::now().duration_since(start).as_nanos() as f32;
   println!("\u{23f1}  {:.3}ms", dur / 1000.0 / 1000.0);

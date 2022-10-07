@@ -1,5 +1,5 @@
-<script>
-  export let csv
+<script lang="ts">
+  export let csv: string
   export let csvRowDelimiter = '\n'
   export let csvColumnDelimiter = ','
   export let hasHeader = true
@@ -7,9 +7,13 @@
   export let tableRowClass = ''
   export let tableColumnClass = ''
   $: rows = (() => {
-    let rows = csv ? csv.split(csvRowDelimiter) : null
-    if (rows[rows.length - 1] === '') rows.pop()
-    return rows
+    if (csv) {
+      let rows = csv.split(csvRowDelimiter)
+      if (rows[rows.length - 1] === '') rows.pop()
+      return rows
+    } else {
+      return null
+    }
   })()
   $: table = rows ? rows.map((row) => row.split(csvColumnDelimiter)) : []
   $: header = hasHeader && table && table.length ? table[0] : null
@@ -21,17 +25,17 @@
     <thead>
       <tr>
         {#each header as column, i}
-          <th key={`table-col-${i}`}>{column}</th>
+          <th>{column}</th>
         {/each}
       </tr>
     </thead>
   {/if}
   {#if body}
     <tbody>
-      {#each body as row, rowI}
-        <tr class={tableRowClass} key={`${row ? row : 'row'}-${rowI}`}>
-          {#each row as column, colI}
-            <td class={tableColumnClass} key={`${column}-${colI}-'${rowI}`}>
+      {#each body as row}
+        <tr class={tableRowClass}>
+          {#each row as column}
+            <td class={tableColumnClass}>
               {column}
             </td>
           {/each}

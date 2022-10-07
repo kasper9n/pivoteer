@@ -1,14 +1,31 @@
 <script lang="ts">
   import { event } from '@tauri-apps/api'
   import { onDestroy } from 'svelte'
-  import type { Project } from './scripts/project'
-  import { getDefaultProject } from './scripts/project'
+  import type { Project } from './bindings'
   import ProjectComponent from './components/Project.svelte'
 
   let project: Project | null = null
 
   async function newProject() {
-    project = getDefaultProject()
+    project = {
+      sources: [
+        {
+          name: 'Landr',
+          headerRowIndex: 0,
+          columns: [
+            { name: 'ISRC', number: null },
+            { name: 'UPC', number: null },
+            { name: 'Net earnings (USD)', number: null },
+          ],
+          files: [],
+        },
+      ],
+      columns: [
+        { name: 'ISRC', action: 'Unique' },
+        { name: 'UPC', action: 'Unique' },
+        { name: 'Revenue', action: 'Sum' },
+      ],
+    }
   }
 
   const unlistenFuture = event.listen('menu', ({ payload }) => {

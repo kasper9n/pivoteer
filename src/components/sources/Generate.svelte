@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dialog, invoke, fs } from '@tauri-apps/api'
-  import type { Source } from '../../scripts/project'
+  import type { Source } from '../../bindings'
   import * as clipboard from '@tauri-apps/api/clipboard'
   import { popup } from '../../scripts/helpers'
   import CsvTable from './CsvTable.svelte'
