@@ -12,9 +12,8 @@
     if (newSourceName) {
       const newSource: Source = {
         name: newSourceName,
-        columns: [],
+        source_type: 'Landr',
         files: [],
-        headerRowIndex: 0,
       }
       project.sources = [...project.sources, newSource]
       sourceIndex = project.sources.length - 1
@@ -25,7 +24,11 @@
 
 <div class="container">
   <aside>
-    <div class="header" class:active={sourceIndex === null} on:click={() => (sourceIndex = null)}>
+    <div
+      class="header"
+      class:active={sourceIndex === null}
+      on:mousedown={() => (sourceIndex = null)}
+    >
       Settings
     </div>
     <div class="header">
@@ -34,7 +37,7 @@
     </div>
     <div class="fullbox">
       {#each project.sources as source, i}
-        <div class="row" class:active={i === sourceIndex} on:click={() => (sourceIndex = i)}>
+        <div class="row" class:active={i === sourceIndex} on:mousedown={() => (sourceIndex = i)}>
           {source.name}
         </div>
       {/each}
@@ -80,6 +83,7 @@
     float: left
   .header
     padding: 10px
+    cursor: default
   .fullbox
     overflow-y: auto
     height: 100%
@@ -90,7 +94,7 @@
       font-size: 14px
       cursor: default
   .active
-    background-color: hsla(0, 0%, 100%, 0.1)
+    background-color: #132C56
   main
     display: flex
     flex-direction: column

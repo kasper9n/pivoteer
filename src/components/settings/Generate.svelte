@@ -1,11 +1,11 @@
 <script lang="ts">
   import { dialog, invoke, fs } from '@tauri-apps/api'
-  import type { Source } from '../../bindings'
+  import type { Project } from '../../bindings'
   import * as clipboard from '@tauri-apps/api/clipboard'
   import { popup } from '../../scripts/helpers'
-  import CsvTable from './CsvTable.svelte'
+  import CsvTable from '../sources/CsvTable.svelte'
 
-  export let source: Source
+  export let project: Project
 
   let outputCsv: string | null = null
   let generating = false
@@ -15,7 +15,7 @@
     }
     try {
       generating = true
-      outputCsv = await invoke('generate', { source })
+      outputCsv = await invoke('generate', { project })
     } catch (err) {
       popup(String(err))
       outputCsv = null
@@ -47,11 +47,13 @@
 <div class="output-header">
   <h3>Output</h3>
 </div>
-<button on:click={generate}>Generate</button>
-{#if outputCsv !== null}
-  <button on:click={csvCopy}>Copy</button>
-  <button on:click={csvSaveAs}>Save As...</button>
-{/if}
+<div>
+  <button on:click={generate}>Generate</button>
+  {#if outputCsv !== null}
+    <button on:click={csvCopy}>Copy</button>
+    <button on:click={csvSaveAs}>Save As...</button>
+  {/if}
+</div>
 <div class="table">
   {#if generating}
     Generating...

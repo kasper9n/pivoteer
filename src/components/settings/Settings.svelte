@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Project } from '../../bindings'
+  import Generate from './Generate.svelte'
   import OutputColumn from './OutputColumn.svelte'
 
   export let project: Project
@@ -27,6 +28,9 @@
 {#each project.columns as column, i}
   <OutputColumn bind:column remove={() => removeColumn(i)} />
 {/each}
+
+<h3>Generate</h3>
+<Generate {project} />
 
 <style lang="sass">
   .row

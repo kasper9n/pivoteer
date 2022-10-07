@@ -50,7 +50,6 @@
     max-height: 100%
     font-size: 14px
     border-collapse: collapse
-    background-color: #FFFFFF
   th, td
     border: 1px solid #D1D7DD
     padding: 6px 13px

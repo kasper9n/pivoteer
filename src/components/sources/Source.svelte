@@ -2,35 +2,10 @@
   import { popup } from '../../scripts/helpers'
   import FileDrop from 'svelte-tauri-filedrop'
   import { dialog } from '@tauri-apps/api'
-  import type { Source } from '../../bindings'
-  import ColumnOption from './ColumnOption.svelte'
+  import { Source, sourceTypes } from '../../bindings'
   import { fade } from 'svelte/transition'
 
   export let source: Source
-  let headerRowNumber: number | null = 1
-  $: {
-    if (headerRowNumber === null) {
-      source.headerRowIndex = 1
-    } else {
-      if (headerRowNumber < 1) {
-        headerRowNumber = 1
-      } else if (headerRowNumber % 1 !== 0) {
-        headerRowNumber = Math.floor(headerRowNumber)
-      }
-      source.headerRowIndex = headerRowNumber - 1
-    }
-  }
-  function addColumn() {
-    source.columns.push({
-      idType: 'Name',
-      id: '',
-    })
-    source.columns = source.columns
-  }
-  function removeColumn(index: number) {
-    source.columns.splice(index, 1)
-    source.columns = source.columns
-  }
 
   async function addFiles(files: string[]) {
     for (const file of files) {
@@ -56,34 +31,31 @@
   }
 </script>
 
-<section>
+<section class="my-10">
   <h2>Source</h2>
-</section>
-<section>
   <div class="row">
     <p>Name:</p>
     <input type="text" bind:value={source.name} />
   </div>
   <div class="row">
-    <p>Header row number:</p>
-    <input type="number" bind:value={headerRowNumber} placeholder="1" />
+    <p>Type:</p>
+    <select bind:value={source.source_type}>
+      {#each sourceTypes as sourceType}
+        <option value={sourceType.type}>{sourceType.name}</option>
+      {/each}
+    </select>
   </div>
-  <div class="row">
-    <p>Columns</p>
-    <button on:click={addColumn}>+</button>
-  </div>
-  {#each source.columns as column, i}
-    <ColumnOption bind:column remove={() => removeColumn(i)} />
-  {/each}
 </section>
-<section>
+<section class="files-section">
   <div class="row">
     <h3>Files</h3>
     <button on:click={addFilesDialog}>Add files</button>
   </div>
-  {#each source.files as file}
-    <p>{file.replace(/^.*[\\/]/, '')}</p>
-  {/each}
+  <div class="files">
+    {#each source.files as file}
+      <p>{file.replace(/^.*[\\/]/, '')}</p>
+    {/each}
+  </div>
 </section>
 
 <FileDrop extensions={['csv', 'tsv']} handleFiles={addFiles} let:files>
@@ -95,8 +67,20 @@
 </FileDrop>
 
 <style lang="sass">
-  section
-    margin: 10px 0px
+  .my-10
+    margin-top: 10px
+    margin-bottom: 10px
+  .files
+    height: 0px
+    flex-grow: 1
+    display: flex
+    flex-direction: column
+    overflow: auto
+  .files-section
+    flex-grow: 1
+    height: 0px
+    display: flex
+    flex-direction: column
   p
     margin: 0px
   .row
@@ -104,9 +88,6 @@
     align-items: center
   input
     margin-left: 5px
-  input[type="number"]
-    margin-left: 5px
-    width: 40px
   .dropzone
     position: fixed
     width: 100%

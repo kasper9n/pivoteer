@@ -8,22 +8,17 @@
 
   async function newProject() {
     project = {
+      columns: [
+        { name: 'ISRC', kind: 'Isrc', action: 'Unique', enabled: true },
+        { name: 'UPC', kind: 'Upc', action: 'Unique', enabled: true },
+        { name: 'Revenue', kind: 'NetEarnings', action: 'Unique', enabled: true },
+      ],
       sources: [
         {
           name: 'Landr',
-          headerRowIndex: 0,
-          columns: [
-            { name: 'ISRC', number: null },
-            { name: 'UPC', number: null },
-            { name: 'Net earnings (USD)', number: null },
-          ],
+          source_type: 'Landr',
           files: [],
         },
-      ],
-      columns: [
-        { name: 'ISRC', action: 'Unique' },
-        { name: 'UPC', action: 'Unique' },
-        { name: 'Revenue', action: 'Sum' },
       ],
     }
   }
@@ -57,7 +52,7 @@
     font-family: Arial, Helvetica, sans-serif
     font-size: 18px
     background-color: #100711
-    background: linear-gradient(#42151E, #100711)
+    background: #18181b
     color: white
     height: 100%
   :global(h1), :global(h2), :global(h3)
@@ -75,8 +70,9 @@
     padding: 8px 20px
     border: none
     border-radius: 5px
-    background-color: hsla(305, 41%, 38%, 0.3)
-    color: white
+    background-color: #132C56
+    color: #2e7bff
+    font-weight: 500
     &:hover
-      background-color: hsla(305, 41%, 38%, 0.5)
+      background-color: #142f5c
 </style>

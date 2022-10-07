@@ -4,6 +4,7 @@ use crate::throw;
 use bigdecimal::BigDecimal;
 use csv::{self, Reader, StringRecord};
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -53,6 +54,7 @@ fn read_csv(file_path: &Path, header_row_index: usize) -> Result<Reader<BufReade
   Ok(rdr)
 }
 
+#[allow(dead_code)]
 pub enum ColumnLocation<'a> {
   Name(&'a str),
   Index(usize),
@@ -165,6 +167,9 @@ impl Aggregator {
       };
       self.add_csv_record(&record, &key_cols, &value_cols)?;
     }
+
+    let filename = file_path.file_name().unwrap_or(OsStr::new(""));
+    println!("Scanned {}", filename.to_string_lossy());
     Ok(())
   }
 

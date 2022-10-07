@@ -48,7 +48,7 @@ impl SourceType {
 
 #[cfg(debug_assertions)]
 pub fn typegen() {
-  let mut file = std::fs::File::create("./bindings.ts").unwrap();
+  let mut file = std::fs::File::create("../bindings.ts").unwrap();
   let options = DefinitionFileOptions {
     root_namespace: None,
     ..Default::default()
