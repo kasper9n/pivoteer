@@ -39,7 +39,7 @@
   </div>
   <div class="row">
     <p>Type:</p>
-    <select bind:value={source.source_type}>
+    <select bind:value={source.kind}>
       {#each sourceTypes as sourceType}
         <option value={sourceType.type}>{sourceType.name}</option>
       {/each}

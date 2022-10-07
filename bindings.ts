@@ -3,6 +3,6 @@
 export type ColumnType=("Isrc"|"Upc"|"NetEarnings");
 export type Action=("Unique"|"Sum");
 export type Column={"kind":ColumnType;"enabled":boolean;"name":string;"action":Action;};
-export type SourceType="Landr";
-export type Source={"name":string;"files":(string)[];"source_type":SourceType;};
+export type SourceType=("Landr"|"Pretzel"|"RepostBySoundCloud");
+export type Source={"name":string;"files":(string)[];"kind":SourceType;};
 export type Project={"columns":(Column)[];"sources":(Source)[];};

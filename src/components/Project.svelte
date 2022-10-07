@@ -12,7 +12,7 @@
     if (newSourceName) {
       const newSource: Source = {
         name: newSourceName,
-        source_type: 'Landr',
+        kind: 'Landr',
         files: [],
       }
       project.sources = [...project.sources, newSource]

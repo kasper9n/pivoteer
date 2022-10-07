@@ -11,12 +11,12 @@
       columns: [
         { name: 'ISRC', kind: 'Isrc', action: 'Unique', enabled: true },
         { name: 'UPC', kind: 'Upc', action: 'Unique', enabled: true },
-        { name: 'Revenue', kind: 'NetEarnings', action: 'Unique', enabled: true },
+        { name: 'Revenue', kind: 'NetEarnings', action: 'Sum', enabled: true },
       ],
       sources: [
         {
           name: 'Landr',
-          source_type: 'Landr',
+          kind: 'Landr',
           files: [],
         },
       ],

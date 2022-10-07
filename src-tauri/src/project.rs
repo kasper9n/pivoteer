@@ -1,6 +1,6 @@
-use crate::adapters::{adapter, Adapter};
 use serde::Deserialize;
-use typescript_type_def::{write_definition_file, DefinitionFileOptions, TypeDef};
+use strum_macros::Display;
+use typescript_type_def::TypeDef;
 
 #[derive(Deserialize, Debug, TypeDef)]
 pub struct Project {
@@ -15,7 +15,7 @@ pub struct Column {
   pub name: String,
   pub action: Action,
 }
-#[derive(Deserialize, Debug, TypeDef)]
+#[derive(Deserialize, Clone, Copy, Debug, TypeDef)]
 pub enum ColumnType {
   Isrc,
   Upc,
@@ -32,22 +32,19 @@ pub enum Action {
 pub struct Source {
   pub name: String,
   pub files: Vec<String>,
-  pub source_type: SourceType,
+  pub kind: SourceType,
 }
 
-#[derive(Deserialize, Debug, TypeDef)]
+#[derive(Deserialize, Clone, Copy, Display, Debug, TypeDef)]
 pub enum SourceType {
   Landr,
-}
-
-impl SourceType {
-  pub fn adapter(&self) -> impl Adapter {
-    adapter(self)
-  }
+  Pretzel,
+  RepostBySoundCloud,
 }
 
 #[cfg(debug_assertions)]
 pub fn typegen() {
+  use typescript_type_def::{write_definition_file, DefinitionFileOptions};
   let mut file = std::fs::File::create("../bindings.ts").unwrap();
   let options = DefinitionFileOptions {
     root_namespace: None,
