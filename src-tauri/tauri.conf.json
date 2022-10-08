@@ -49,6 +49,9 @@
       "clipboard": {
         "writeText": true
       },
+      "window": {
+        "close": true
+      },
       "shell": {
         "open": true
       },

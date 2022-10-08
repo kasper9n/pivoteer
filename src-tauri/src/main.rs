@@ -49,7 +49,13 @@ fn main() {
         .expect("Unable to create window");
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![error_popup, cmd::generate,])
+    .invoke_handler(tauri::generate_handler![
+      error_popup,
+      cmd::generate,
+      cmd::open,
+      cmd::save,
+      cmd::set_edited,
+    ])
     .menu(Menu::with_items([
       #[cfg(target_os = "macos")]
       MenuEntry::Submenu(Submenu::new(
@@ -68,9 +74,21 @@ fn main() {
       )),
       MenuEntry::Submenu(Submenu::new(
         "File",
-        Menu::with_items([CustomMenuItem::new("New", "New")
-          .accelerator("cmdOrControl+N")
-          .into()]),
+        Menu::with_items([
+          CustomMenuItem::new("New", "New")
+            .accelerator("cmdOrControl+N")
+            .into(),
+          CustomMenuItem::new("Open...", "Open...")
+            .accelerator("cmdOrControl+O")
+            .into(),
+          MenuItem::Separator.into(),
+          CustomMenuItem::new("Close", "Close")
+            .accelerator("cmdOrControl+W")
+            .into(),
+          CustomMenuItem::new("Save", "Save")
+            .accelerator("cmdOrControl+S")
+            .into(),
+        ]),
       )),
       MenuEntry::Submenu(Submenu::new(
         "Edit",

@@ -1,16 +1,18 @@
 use crate::adapters::{adapter, Adapter, CsvRow};
 use crate::project::{Action, Column, ColumnType, Project, Source, SourceType};
 use crate::throw;
+use atomicwrites::{AtomicFile, OverwriteBehavior};
 use bigdecimal::BigDecimal;
 use csv::{self, Reader};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use std::io::{BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Instant;
-use tauri::command;
+use tauri::{command, Window};
 
 pub fn get_cell<'a>(record: &'a csv::StringRecord, index: usize) -> Result<&'a str, String> {
   return match record.get(index) {
@@ -191,6 +193,19 @@ impl Aggregator {
 }
 
 #[command]
+pub async fn open(path: PathBuf) -> Result<Project, String> {
+  let file = match File::open(path) {
+    Ok(file) => file,
+    Err(e) => throw!("Unable to open file: {}", e),
+  };
+  let project: Project = match serde_json::from_reader(file) {
+    Ok(p) => p,
+    Err(e) => throw!("Invalid file: {}", e),
+  };
+  return Ok(project);
+}
+
+#[command]
 pub async fn generate(project: Project) -> Result<String, String> {
   let start = Instant::now();
 
@@ -204,4 +219,55 @@ pub async fn generate(project: Project) -> Result<String, String> {
   println!("\u{23f1}  {:.3}ms", dur / 1000.0 / 1000.0);
 
   return Ok(output);
+}
+
+pub fn ensure_parent_exists(file_path: &PathBuf) -> Result<(), String> {
+  if let Some(parent) = file_path.parent() {
+    if let Err(e) = std::fs::create_dir_all(parent) {
+      throw!("Error creating parent folder: {}", e.to_string());
+    }
+  }
+  Ok(())
+}
+
+pub fn write_atomically(file_path: &PathBuf, buf: &[u8]) -> Result<(), String> {
+  ensure_parent_exists(&file_path)?;
+  let af = AtomicFile::new(&file_path, OverwriteBehavior::AllowOverwrite);
+  match af.write(|f| f.write_all(&buf)) {
+    Ok(_) => Ok(()),
+    Err(e) => Err(e.to_string()),
+  }
+}
+
+#[command]
+pub async fn save(project: Project, path: PathBuf) -> Result<(), String> {
+  let mut json = Vec::new();
+  let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
+  let mut ser = serde_json::Serializer::with_formatter(&mut json, formatter);
+  match project.serialize(&mut ser) {
+    Ok(_) => {}
+    Err(e) => throw!("Error saving content: {}", e.to_string()),
+  }
+  match write_atomically(&path, &json) {
+    Ok(_) => {}
+    Err(e) => throw!("Error saving: {}", e.to_string()),
+  }
+  return Ok(());
+}
+
+#[command]
+pub async fn set_edited(edited: bool, win: Window) -> Result<(), String> {
+  #[cfg(target_os = "macos")]
+  {
+    use cocoa::appkit::NSWindow;
+    let nsw = win.ns_window().unwrap() as cocoa::base::id;
+    unsafe {
+      if edited {
+        nsw.setDocumentEdited_(cocoa::base::YES);
+      } else {
+        nsw.setDocumentEdited_(cocoa::base::NO);
+      }
+    }
+  }
+  return Ok(());
 }

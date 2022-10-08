@@ -78,6 +78,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomicwrites"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb8f2cd6962fa53c0e2a9d3f97eaa7dbd1e3cbbeeb4745403515b42ae07b3ff6"
+dependencies = [
+ "tempfile",
+ "winapi",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1775,8 +1785,11 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 name = "pivoteer"
 version = "0.1.0"
 dependencies = [
+ "atomicwrites",
  "bigdecimal",
+ "cocoa",
  "csv",
+ "objc",
  "serde",
  "serde_json",
  "strum_macros",

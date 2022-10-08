@@ -70,22 +70,4 @@ pub fn typegen() {
   };
   write_definition_file::<_, Project>(&mut file, options).unwrap();
   println!("Generated TS types");
-
-  let cc = Source {
-    name: "test".to_string(),
-    files: vec![],
-    kind: SourceType::Custom(SourceConfig {
-      header_row_index: 0,
-      isrc: Some(ColumnConfig::Name("ISRC".to_string())),
-      upc: Some(ColumnConfig::Name("UPC".to_string())),
-      revenue: Some(ColumnConfig::Name("Revenue (USD)".to_string())),
-    }),
-  };
-  println!("{}", serde_json::to_string_pretty(&cc).unwrap());
-  let cc = Source {
-    name: "test".to_string(),
-    files: vec![],
-    kind: SourceType::Landr,
-  };
-  println!("{}", serde_json::to_string_pretty(&cc).unwrap());
 }

@@ -1,31 +1,87 @@
 <script lang="ts">
-  import { event } from '@tauri-apps/api'
+  import { dialog, event, window as tauriWindow } from '@tauri-apps/api'
+  import { invoke } from '@tauri-apps/api/tauri'
   import { onDestroy } from 'svelte'
   import type { Project } from './bindings'
   import ProjectComponent from './components/Project.svelte'
 
-  let project: Project | null = null
+  type File = {
+    path?: string
+    project: Project
+  }
+  let file: File | null = null
+  $: file?.project, setEdited(!!file?.project)
+
+  invoke('set_edited', { edited: false })
+  let isEdited = false
+  async function setEdited(edited: boolean) {
+    if (isEdited !== edited) {
+      await invoke('set_edited', { edited })
+      isEdited = edited
+    }
+  }
 
   async function newProject() {
-    project = {
-      columns: [
-        { name: 'ISRC', kind: 'Isrc', action: 'Unique', enabled: true },
-        { name: 'UPC', kind: 'Upc', action: 'Unique', enabled: true },
-        { name: 'Revenue', kind: 'NetEarnings', action: 'Sum', enabled: true },
-      ],
-      sources: [
-        {
-          name: 'Landr',
-          kind: { id: 'Landr' },
-          files: [],
-        },
-      ],
+    file = {
+      project: {
+        columns: [
+          { name: 'ISRC', kind: 'Isrc', action: 'Unique', enabled: true },
+          { name: 'UPC', kind: 'Upc', action: 'Unique', enabled: true },
+          { name: 'Revenue', kind: 'NetEarnings', action: 'Sum', enabled: true },
+        ],
+        sources: [
+          {
+            name: 'Landr',
+            kind: { id: 'Landr' },
+            files: [],
+          },
+        ],
+      },
+    }
+  }
+
+  async function openProjectDialog() {
+    const filePath = await dialog.open({
+      filters: [{ name: 'Pivoteer', extensions: ['pivoteer'] }],
+      multiple: false,
+    })
+    if (typeof filePath === 'string') {
+      openProject(filePath)
+    }
+  }
+  async function openProject(path: string) {
+    file = {
+      path,
+      project: await invoke('open', { path }),
+    }
+  }
+
+  async function saveProject(file: File) {
+    if (!file.path) {
+      const pickedPath = await dialog.save({
+        filters: [{ name: 'Pivoteer', extensions: ['pivoteer'] }],
+      })
+      file.path = pickedPath || undefined
+    }
+    if (file.path) {
+      await invoke('save', { project: file.project, path: file.path })
+      setEdited(false)
     }
   }
 
   const unlistenFuture = event.listen('menu', ({ payload }) => {
     if (payload === 'New') {
       newProject()
+    } else if (payload === 'Open...') {
+      openProjectDialog()
+    } else if (payload === 'Close') {
+      if (file) {
+        file = null
+      } else {
+        tauriWindow.getCurrent().close()
+      }
+    } else if (payload === 'Save' && file) {
+      saveProject(file)
     }
   })
   onDestroy(async () => {
@@ -34,11 +90,14 @@
   })
 </script>
 
-{#if project}
-  <ProjectComponent {project} />
+{#if file}
+  <ProjectComponent bind:project={file.project} />
 {:else}
   <div class="start-page">
-    <button on:click={newProject}>New Project</button>
+    <div class="col">
+      <button on:click={newProject}>New Project</button>
+      <button on:click={openProjectDialog}>Open...</button>
+    </div>
   </div>
 {/if}
 
@@ -65,6 +124,11 @@
     height: 100%
     align-items: center
     justify-content: center
+  .col
+    display: flex
+    flex-direction: column
+    align-items: start
+    // justify-content: start
   button
     font-size: 15px
     padding: 8px 20px
