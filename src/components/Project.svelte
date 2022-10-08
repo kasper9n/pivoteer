@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Project, Source } from '../bindings'
   import Modal from './Modal.svelte'
-  import Options from './sources/Source.svelte'
+  import SourceComponent from './sources/Source.svelte'
   import Settings from './settings/Settings.svelte'
 
   export let project: Project
@@ -12,7 +12,7 @@
     if (newSourceName) {
       const newSource: Source = {
         name: newSourceName,
-        kind: 'Landr',
+        kind: { id: 'Landr' },
         files: [],
       }
       project.sources = [...project.sources, newSource]
@@ -47,7 +47,7 @@
     {#if sourceIndex === null}
       <Settings bind:project />
     {:else if project.sources[sourceIndex]}
-      <Options bind:source={project.sources[sourceIndex]} />
+      <SourceComponent bind:source={project.sources[sourceIndex]} />
     {/if}
   </main>
 </div>

@@ -16,7 +16,7 @@
       sources: [
         {
           name: 'Landr',
-          kind: 'Landr',
+          kind: { id: 'Landr' },
           files: [],
         },
       ],

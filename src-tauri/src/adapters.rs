@@ -1,5 +1,5 @@
 use crate::cmd::get_cell;
-use crate::project::{ColumnType, SourceType};
+use crate::project::{ColumnConfig, ColumnType, SourceConfig, SourceType};
 use crate::throw;
 use csv::StringRecord;
 use std::fs::File;
@@ -64,12 +64,13 @@ fn wrap(v: impl AdapterT + 'static) -> Adapter {
   b
 }
 
-pub fn adapter<'a>(kind: &SourceType, records: &'a mut CsvIter) -> Result<Adapter, String> {
+pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter, String> {
   let mut header = CsvHeader { records, row: None };
   let adapter = match kind {
     SourceType::Landr => wrap(Landr::new(&mut header)?),
     SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
     SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(&mut header)?),
+    SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
   };
   Ok(adapter)
 }
@@ -142,5 +143,75 @@ impl AdapterT for RepostBySoundCloud {
       ColumnType::Upc => row.get(self.upc),
       ColumnType::NetEarnings => row.get(self.revenue),
     }
+  }
+}
+
+pub struct CustomSource {
+  pub isrc: Option<Column>,
+  pub upc: Option<Column>,
+  pub revenue: Option<Column>,
+}
+impl CustomSource {
+  fn new(header: &mut CsvHeader, config: SourceConfig) -> Result<Self, String> {
+    header.skip_rows(config.header_row_index)?;
+    let header_row = header.get()?;
+    Ok(Self {
+      isrc: Column::from_config(config.isrc, header_row)?,
+      upc: Column::from_config(config.upc, header_row)?,
+      revenue: Column::from_config(config.revenue, header_row)?,
+    })
+  }
+}
+impl AdapterT for CustomSource {
+  fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
+    let column_field = match &kind {
+      ColumnType::Isrc => &self.isrc,
+      ColumnType::Upc => &self.upc,
+      ColumnType::NetEarnings => &self.revenue,
+    };
+    let column = match column_field {
+      Some(column) => column,
+      None => throw!("Unsupported column {:?}", kind),
+    };
+    match column {
+      Column::Index(index) => row.get(*index),
+      Column::CustomValue(custom_value) => Ok(custom_value.clone()),
+    }
+  }
+}
+
+pub enum Column {
+  Index(usize),
+  CustomValue(String),
+}
+impl Column {
+  fn from_config(config: Option<ColumnConfig>, header: &CsvRow) -> Result<Option<Self>, String> {
+    let config = match config {
+      Some(config) => config,
+      None => return Ok(None),
+    };
+    let column = match config {
+      ColumnConfig::Name(name) => {
+        let index = header.record.iter().position(|s| s == name);
+        let index = index.ok_or(format!("No column named {name}"))?;
+        Column::Index(index)
+      }
+      ColumnConfig::Index(index) => {
+        header.get(index)?;
+        Column::Index(index)
+      }
+      ColumnConfig::NameAtIndex(name, index) => {
+        let actual_name = header
+          .record
+          .get(index)
+          .ok_or(format!("No column number {}", index + 1))?;
+        if actual_name != name {
+          throw!("No column number {} named {}", index + 1, name);
+        }
+        Column::Index(index)
+      }
+      ColumnConfig::CustomValue(value) => Column::CustomValue(value),
+    };
+    Ok(Some(column))
   }
 }

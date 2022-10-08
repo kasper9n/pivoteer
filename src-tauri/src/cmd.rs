@@ -1,5 +1,5 @@
 use crate::adapters::{adapter, Adapter, CsvRow};
-use crate::project::{Action, Column, ColumnType, Project, SourceType};
+use crate::project::{Action, Column, ColumnType, Project, Source, SourceType};
 use crate::throw;
 use bigdecimal::BigDecimal;
 use csv::{self, Reader};
@@ -101,7 +101,7 @@ impl Aggregator {
     let file_path = Path::new(&file_path);
     let mut csv = read_csv(file_path)?.into_records();
 
-    let adapter = adapter(&kind, &mut csv)?;
+    let adapter = adapter(kind, &mut csv)?;
 
     let mut key_cols = Vec::new();
     let mut value_cols = Vec::new();
@@ -125,6 +125,20 @@ impl Aggregator {
         Err(e) => throw!("Error reading record: {}", e.to_string()),
       };
       self.add_csv_record(&adapter, record, &key_cols, &value_cols)?;
+    }
+    Ok(())
+  }
+
+  pub fn add_source(&mut self, source: Source) -> Result<(), String> {
+    for file in source.files {
+      let filename = Path::new(&file)
+        .file_name()
+        .unwrap_or(OsStr::new(""))
+        .to_string_lossy();
+      match self.add_csv(&file, source.kind.clone()) {
+        Ok(_) => println!("Scanned {}", filename),
+        Err(e) => throw!("{} - Failed scanning {filename}: {e}", source.kind),
+      };
     }
     Ok(())
   }
@@ -181,18 +195,9 @@ pub async fn generate(project: Project) -> Result<String, String> {
   let start = Instant::now();
 
   let mut aggregator = Aggregator::new(project.columns);
-  for source in project.sources {
-    for file in source.files {
-      let filename = Path::new(&file)
-        .file_name()
-        .unwrap_or(OsStr::new(""))
-        .to_string_lossy();
-      match aggregator.add_csv(&file, source.kind) {
-        Ok(_) => println!("Scanned {}", filename),
-        Err(e) => throw!("{} - Failed scanning {filename}: {e}", source.kind),
-      };
-    }
-  }
+  project.sources.into_iter().try_for_each(|source| {
+    return aggregator.add_source(source);
+  })?;
   let output = aggregator.output()?;
 
   let dur = Instant::now().duration_since(start).as_nanos() as f32;

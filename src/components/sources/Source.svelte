@@ -2,10 +2,34 @@
   import { popup } from '../../scripts/helpers'
   import FileDrop from 'svelte-tauri-filedrop'
   import { dialog } from '@tauri-apps/api'
-  import { Source, sourceTypes } from '../../bindings'
+  import type { Source, SourceType } from '../../bindings'
   import { fade } from 'svelte/transition'
+  import ColumnConfig from './ColumnConfig.svelte'
 
   export let source: Source
+
+  const kindOptions: { kind: SourceType; text: string }[] = [
+    { text: 'Landr', kind: { id: 'Landr' } },
+    { text: 'Pretzel', kind: { id: 'Pretzel' } },
+    { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },
+    {
+      text: 'Custom',
+      kind: {
+        id: 'Custom',
+        content: {
+          header_row_index: 0,
+          isrc: null,
+          upc: null,
+          revenue: null,
+        },
+      },
+    },
+  ]
+
+  let kindIndex = kindOptions.findIndex((o) => o.kind.id === source.kind.id)
+  $: if (source.kind.id !== kindOptions[kindIndex].kind.id) {
+    source.kind = kindOptions[kindIndex].kind
+  }
 
   async function addFiles(files: string[]) {
     for (const file of files) {
@@ -39,11 +63,22 @@
   </div>
   <div class="row">
     <p>Type:</p>
-    <select bind:value={source.kind}>
-      {#each sourceTypes as sourceType}
-        <option value={sourceType.type}>{sourceType.name}</option>
+    <select bind:value={kindIndex}>
+      {#each kindOptions as option, i}
+        <option value={i}>{option.text}</option>
       {/each}
     </select>
+  </div>
+  <div class="ml">
+    {#if source.kind.id === 'Custom'}
+      <div class="row">
+        <p>Header row index:</p>
+        <input type="number" bind:value={source.kind.content.header_row_index} />
+      </div>
+      <ColumnConfig label="ISRC" bind:column={source.kind.content.isrc} />
+      <ColumnConfig label="UPC" bind:column={source.kind.content.upc} />
+      <ColumnConfig label="Revenue" bind:column={source.kind.content.revenue} />
+    {/if}
   </div>
 </section>
 <section class="files-section">
@@ -67,6 +102,8 @@
 </FileDrop>
 
 <style lang="sass">
+  .ml
+    margin-left: 40px
   .my-10
     margin-top: 10px
     margin-bottom: 10px

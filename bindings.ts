@@ -3,6 +3,9 @@
 export type ColumnType=("Isrc"|"Upc"|"NetEarnings");
 export type Action=("Unique"|"Sum");
 export type Column={"kind":ColumnType;"enabled":boolean;"name":string;"action":Action;};
-export type SourceType=("Landr"|"Pretzel"|"RepostBySoundCloud");
+export type Usize=number;
+export type ColumnConfig=({"Name":string;}|{"Index":Usize;}|{"NameAtIndex":[string,Usize];}|{"CustomValue":string;});
+export type SourceConfig={"header_row_index":Usize;"isrc":(ColumnConfig|null);"upc":(ColumnConfig|null);"revenue":(ColumnConfig|null);};
+export type SourceType=({"id":"Landr";}|{"id":"Pretzel";}|{"id":"RepostBySoundCloud";}|{"id":"Custom";"content":SourceConfig;});
 export type Source={"name":string;"files":(string)[];"kind":SourceType;};
 export type Project={"columns":(Column)[];"sources":(Source)[];};
