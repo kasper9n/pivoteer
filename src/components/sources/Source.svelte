@@ -8,27 +8,35 @@
 
   export let source: Source
 
-  const kindOptions: { kind: SourceType; text: string }[] = [
-    { text: 'Landr', kind: { id: 'Landr' } },
-    { text: 'Pretzel', kind: { id: 'Pretzel' } },
-    { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },
-    {
-      text: 'Custom',
-      kind: {
-        id: 'Custom',
-        content: {
-          header_row_index: 0,
-          isrc: null,
-          upc: null,
-          revenue: null,
+  function kindOptions(): { kind: SourceType; text: string }[] {
+    return [
+      { text: 'Bandcamp', kind: { id: 'Bandcamp' } },
+      { text: 'Landr', kind: { id: 'Landr' } },
+      { text: 'Pretzel', kind: { id: 'Pretzel' } },
+      { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },
+      { text: 'Stem', kind: { id: 'Stem' } },
+      {
+        text: 'Custom',
+        kind: {
+          id: 'Custom',
+          content: {
+            header_row_index: 0,
+            isrc: null,
+            upc: null,
+            revenue: null,
+          },
         },
       },
-    },
-  ]
-
-  let kindIndex = kindOptions.findIndex((o) => o.kind.id === source.kind.id)
-  $: if (source.kind.id !== kindOptions[kindIndex].kind.id) {
-    source.kind = kindOptions[kindIndex].kind
+    ]
+  }
+  let kindIndex: number
+  $: getKindIndex(source)
+  $: setKind(kindIndex)
+  function getKindIndex(source: Source) {
+    kindIndex = kindOptions().findIndex((o) => o.kind.id === source.kind.id)
+  }
+  function setKind(index: number) {
+    source.kind = kindOptions()[index].kind
   }
 
   async function addFiles(files: string[]) {
@@ -64,7 +72,7 @@
   <div class="row">
     <p>Type:</p>
     <select bind:value={kindIndex}>
-      {#each kindOptions as option, i}
+      {#each kindOptions() as option, i}
         <option value={i}>{option.text}</option>
       {/each}
     </select>

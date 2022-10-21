@@ -38,9 +38,11 @@ pub struct Source {
 #[derive(Serialize, Deserialize, Clone, Display, Debug, TypeDef)]
 #[serde(tag = "id", content = "content")]
 pub enum SourceType {
+  Bandcamp,
   Landr,
   Pretzel,
   RepostBySoundCloud,
+  Stem,
   Custom(SourceConfig),
 }
 

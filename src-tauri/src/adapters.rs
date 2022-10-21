@@ -67,12 +67,38 @@ fn wrap(v: impl AdapterT + 'static) -> Adapter {
 pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter, String> {
   let mut header = CsvHeader { records, row: None };
   let adapter = match kind {
+    SourceType::Bandcamp => wrap(Bandcamp::new(&mut header)?),
     SourceType::Landr => wrap(Landr::new(&mut header)?),
     SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
     SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(&mut header)?),
+    SourceType::Stem => wrap(Stem::new(&mut header)?),
     SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
   };
   Ok(adapter)
+}
+
+struct Bandcamp {
+  isrc: usize,
+  upc: usize,
+  net_amount: usize,
+}
+impl Bandcamp {
+  fn new(header: &mut CsvHeader) -> Result<Self, String> {
+    Ok(Self {
+      isrc: header.find_by_name("isrc")?,
+      upc: header.find_by_name("upc")?,
+      net_amount: header.find_by_name("net amount")?,
+    })
+  }
+}
+impl AdapterT for Bandcamp {
+  fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
+    match kind {
+      ColumnType::Isrc => row.get(self.isrc),
+      ColumnType::Upc => row.get(self.upc),
+      ColumnType::NetEarnings => row.get(self.net_amount),
+    }
+  }
 }
 
 struct Landr {
@@ -107,7 +133,7 @@ impl Pretzel {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     Ok(Self {
       isrc: header.find_by_name("isrc")?,
-      total_revenue: header.find_by_name("total_revenue)")?,
+      total_revenue: header.find_by_name("total_revenue")?,
     })
   }
 }
@@ -142,6 +168,30 @@ impl AdapterT for RepostBySoundCloud {
       ColumnType::Isrc => row.get(self.isrc),
       ColumnType::Upc => row.get(self.upc),
       ColumnType::NetEarnings => row.get(self.revenue),
+    }
+  }
+}
+
+struct Stem {
+  isrc: usize,
+  upc: usize,
+  net_royalties: usize,
+}
+impl Stem {
+  fn new(header: &mut CsvHeader) -> Result<Self, String> {
+    Ok(Self {
+      isrc: header.find_by_name("isrc")?,
+      upc: header.find_by_name("upc")?,
+      net_royalties: header.find_by_name("net_royalties")?,
+    })
+  }
+}
+impl AdapterT for Stem {
+  fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
+    match kind {
+      ColumnType::Isrc => row.get(self.isrc),
+      ColumnType::Upc => row.get(self.upc),
+      ColumnType::NetEarnings => row.get(self.net_royalties),
     }
   }
 }

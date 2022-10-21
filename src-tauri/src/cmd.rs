@@ -1,7 +1,6 @@
 use crate::adapters::{adapter, Adapter, CsvRow};
 use crate::project::{Action, Column, ColumnType, Project, Source, SourceType};
 use crate::throw;
-use atomicwrites::{AtomicFile, OverwriteBehavior};
 use bigdecimal::BigDecimal;
 use csv::{self, Reader};
 use serde::Serialize;
