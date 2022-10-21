@@ -1,8 +1,8 @@
-use crate::adapters::{adapter, Adapter, CsvRow};
+use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvRow};
 use crate::project::{Action, Column, ColumnType, Project, Source, SourceType};
 use crate::throw;
 use bigdecimal::BigDecimal;
-use csv::{self, Reader};
+use csv;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -28,24 +28,6 @@ fn str_to_dec<'a>(input: &'a str) -> Result<BigDecimal, String> {
     Ok(num) => Ok(num),
     Err(e) => Err(format!("Invalid number: {}", e.to_string())),
   };
-}
-
-fn read_csv(file_path: &Path) -> Result<Reader<BufReader<File>>, String> {
-  let buf_reader = match File::open(file_path.clone()) {
-    Ok(file) => BufReader::new(file),
-    Err(e) => throw!("Error opening csv: {}", e.to_string()),
-  };
-  let ext = file_path.extension().unwrap_or_default().to_string_lossy();
-  let delimiter = match ext.as_ref() {
-    "tsv" => b'\t',
-    "csv" => b',',
-    ext => throw!("Unsupported file extension {}", ext),
-  };
-  let rdr = csv::ReaderBuilder::new()
-    .delimiter(delimiter)
-    .has_headers(false)
-    .from_reader(buf_reader);
-  Ok(rdr)
 }
 
 #[derive(Debug)]
@@ -100,7 +82,20 @@ impl Aggregator {
 
   pub fn add_csv(&mut self, file_path: &String, kind: SourceType) -> Result<(), String> {
     let file_path = Path::new(&file_path);
-    let mut csv = read_csv(file_path)?.into_records();
+    let buf_reader = match File::open(file_path.clone()) {
+      Ok(file) => BufReader::new(file),
+      Err(e) => throw!("Error opening csv: {}", e.to_string()),
+    };
+    let ext = file_path.extension().unwrap_or_default().to_string_lossy();
+    let delimiter = match ext.as_ref() {
+      "tsv" => b'\t',
+      "csv" => b',',
+      ext => throw!("Unsupported file extension {}", ext),
+    };
+    let mut csv_reader_builder = csv::ReaderBuilder::new();
+    csv_reader_builder.delimiter(delimiter).has_headers(false);
+    adapter_csv_settings(&kind, &mut csv_reader_builder);
+    let mut csv = csv_reader_builder.from_reader(buf_reader).into_records();
 
     let adapter = adapter(kind, &mut csv)?;
 

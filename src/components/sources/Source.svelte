@@ -10,7 +10,6 @@
 
   function kindOptions(): { kind: SourceType; text: string }[] {
     return [
-      { text: 'Bandcamp', kind: { id: 'Bandcamp' } },
       { text: 'Landr', kind: { id: 'Landr' } },
       { text: 'Pretzel', kind: { id: 'Pretzel' } },
       { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },

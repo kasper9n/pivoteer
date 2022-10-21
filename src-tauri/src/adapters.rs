@@ -1,7 +1,7 @@
 use crate::cmd::get_cell;
 use crate::project::{ColumnConfig, ColumnType, SourceConfig, SourceType};
 use crate::throw;
-use csv::StringRecord;
+use csv::{ReaderBuilder, StringRecord};
 use std::fs::File;
 use std::io::BufReader;
 
@@ -64,10 +64,17 @@ fn wrap(v: impl AdapterT + 'static) -> Adapter {
   b
 }
 
+pub fn adapter_csv_settings(kind: &SourceType, reader_builder: &mut ReaderBuilder) {
+  match kind {
+    SourceType::RepostBySoundCloud => {
+      reader_builder.flexible(true);
+    }
+    _ => {}
+  }
+}
 pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter, String> {
   let mut header = CsvHeader { records, row: None };
   let adapter = match kind {
-    SourceType::Bandcamp => wrap(Bandcamp::new(&mut header)?),
     SourceType::Landr => wrap(Landr::new(&mut header)?),
     SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
     SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(&mut header)?),
@@ -76,30 +83,6 @@ pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter
     SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
   };
   Ok(adapter)
-}
-
-struct Bandcamp {
-  isrc: usize,
-  upc: usize,
-  net_amount: usize,
-}
-impl Bandcamp {
-  fn new(header: &mut CsvHeader) -> Result<Self, String> {
-    Ok(Self {
-      isrc: header.find_by_name("isrc")?,
-      upc: header.find_by_name("upc")?,
-      net_amount: header.find_by_name("net amount")?,
-    })
-  }
-}
-impl AdapterT for Bandcamp {
-  fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
-    match kind {
-      ColumnType::Isrc => row.get(self.isrc),
-      ColumnType::Upc => row.get(self.upc),
-      ColumnType::NetEarnings => row.get(self.net_amount),
-    }
-  }
 }
 
 struct Landr {
