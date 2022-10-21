@@ -37,7 +37,8 @@
     kindIndex = kindOptions().findIndex((o) => o.kind.id === source.kind.id)
   }
   function setKind(index: number) {
-    source.kind = kindOptions()[index].kind
+    // this runs on mount, so we don't overwrite `source.kind`
+    source.kind.id = kindOptions()[index].kind.id
   }
 
   async function addFiles(files: string[]) {
