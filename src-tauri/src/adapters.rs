@@ -72,6 +72,7 @@ pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter
     SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
     SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(&mut header)?),
     SourceType::Stem => wrap(Stem::new(&mut header)?),
+    SourceType::Symphonic => wrap(Symphonic::new(&mut header)?),
     SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
   };
   Ok(adapter)
@@ -187,6 +188,30 @@ impl Stem {
   }
 }
 impl AdapterT for Stem {
+  fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
+    match kind {
+      ColumnType::Isrc => row.get(self.isrc),
+      ColumnType::Upc => row.get(self.upc),
+      ColumnType::NetEarnings => row.get(self.net_royalties),
+    }
+  }
+}
+
+struct Symphonic {
+  isrc: usize,
+  upc: usize,
+  net_royalties: usize,
+}
+impl Symphonic {
+  fn new(header: &mut CsvHeader) -> Result<Self, String> {
+    Ok(Self {
+      isrc: header.find_by_name("ISRC Code")?,
+      upc: header.find_by_name("UPC Code")?,
+      net_royalties: header.find_by_name("Royalty ($US)")?,
+    })
+  }
+}
+impl AdapterT for Symphonic {
   fn get(&self, row: &CsvRow, kind: &ColumnType) -> Result<String, String> {
     match kind {
       ColumnType::Isrc => row.get(self.isrc),

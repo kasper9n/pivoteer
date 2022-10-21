@@ -15,6 +15,7 @@
       { text: 'Pretzel', kind: { id: 'Pretzel' } },
       { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },
       { text: 'Stem', kind: { id: 'Stem' } },
+      { text: 'Symphonic', kind: { id: 'Symphonic' } },
       {
         text: 'Custom',
         kind: {

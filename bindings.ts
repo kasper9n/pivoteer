@@ -6,6 +6,6 @@ export type Column={"kind":ColumnType;"enabled":boolean;"name":string;"action":A
 export type Usize=number;
 export type ColumnConfig=({"Name":string;}|{"Index":Usize;}|{"NameAtIndex":[string,Usize];}|{"CustomValue":string;});
 export type SourceConfig={"header_row_index":Usize;"isrc":(ColumnConfig|null);"upc":(ColumnConfig|null);"revenue":(ColumnConfig|null);};
-export type SourceType=({"id":"Bandcamp";}|{"id":"Landr";}|{"id":"Pretzel";}|{"id":"RepostBySoundCloud";}|{"id":"Stem";}|{"id":"Custom";"content":SourceConfig;});
+export type SourceType=({"id":"Bandcamp";}|{"id":"Landr";}|{"id":"Pretzel";}|{"id":"RepostBySoundCloud";}|{"id":"Stem";}|{"id":"Symphonic";}|{"id":"Custom";"content":SourceConfig;});
 export type Source={"name":string;"files":(string)[];"kind":SourceType;};
 export type Project={"columns":(Column)[];"sources":(Source)[];};

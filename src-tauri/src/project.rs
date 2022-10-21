@@ -43,6 +43,7 @@ pub enum SourceType {
   Pretzel,
   RepostBySoundCloud,
   Stem,
+  Symphonic,
   Custom(SourceConfig),
 }
 
