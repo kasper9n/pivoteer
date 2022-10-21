@@ -1,9 +1,9 @@
 <script lang="ts">
   import { dialog, event, window as tauriWindow } from '@tauri-apps/api'
-  import { invoke } from '@tauri-apps/api/tauri'
   import { onDestroy } from 'svelte'
   import type { Project } from './bindings'
   import ProjectComponent from './components/Project.svelte'
+  import { runCmd } from './scripts/helpers'
 
   type File = {
     path?: string
@@ -12,11 +12,11 @@
   let file: File | null = null
   $: file?.project, setEdited(!!file?.project)
 
-  invoke('set_edited', { edited: false })
+  runCmd('set_edited', { edited: false })
   let isEdited = false
   async function setEdited(edited: boolean) {
     if (isEdited !== edited) {
-      await invoke('set_edited', { edited })
+      await runCmd('set_edited', { edited })
       isEdited = edited
     }
   }
@@ -52,7 +52,7 @@
   async function openProject(path: string) {
     file = {
       path,
-      project: await invoke('open', { path }),
+      project: await runCmd('open', { path }),
     }
   }
 
@@ -64,7 +64,7 @@
       file.path = pickedPath || undefined
     }
     if (file.path) {
-      await invoke('save', { project: file.project, path: file.path })
+      await runCmd('save', { project: file.project, path: file.path })
       setEdited(false)
     }
   }

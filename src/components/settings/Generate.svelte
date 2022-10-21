@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { dialog, invoke, fs } from '@tauri-apps/api'
+  import { dialog, fs } from '@tauri-apps/api'
   import type { Project } from '../../bindings'
   import * as clipboard from '@tauri-apps/api/clipboard'
-  import { popup } from '../../scripts/helpers'
+  import { popup, runCmd } from '../../scripts/helpers'
   import CsvTable from '../sources/CsvTable.svelte'
 
   export let project: Project
@@ -15,7 +15,7 @@
     }
     try {
       generating = true
-      outputCsv = await invoke('generate', { project })
+      outputCsv = await runCmd('generate', { project })
     } catch (err) {
       popup(String(err))
       outputCsv = null

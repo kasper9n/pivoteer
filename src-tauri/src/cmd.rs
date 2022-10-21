@@ -230,28 +230,27 @@ pub fn ensure_parent_exists(file_path: &PathBuf) -> Result<(), String> {
   Ok(())
 }
 
-pub fn write_atomically(file_path: &PathBuf, buf: &[u8]) -> Result<(), String> {
-  ensure_parent_exists(&file_path)?;
-  let af = AtomicFile::new(&file_path, OverwriteBehavior::AllowOverwrite);
-  match af.write(|f| f.write_all(&buf)) {
-    Ok(_) => Ok(()),
-    Err(e) => Err(e.to_string()),
-  }
-}
-
 #[command]
 pub async fn save(project: Project, path: PathBuf) -> Result<(), String> {
-  let mut json = Vec::new();
-  let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
-  let mut ser = serde_json::Serializer::with_formatter(&mut json, formatter);
-  match project.serialize(&mut ser) {
-    Ok(_) => {}
-    Err(e) => throw!("Error saving content: {}", e.to_string()),
-  }
-  match write_atomically(&path, &json) {
-    Ok(_) => {}
-    Err(e) => throw!("Error saving: {}", e.to_string()),
-  }
+  let json = {
+    let mut json = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
+    let mut ser = serde_json::Serializer::with_formatter(&mut json, formatter);
+    match project.serialize(&mut ser) {
+      Ok(_) => {}
+      Err(e) => throw!("Error saving content: {}", e.to_string()),
+    }
+    json
+  };
+  ensure_parent_exists(&path)?;
+  let mut file = match File::create(path) {
+    Ok(file) => file,
+    Err(e) => throw!("Unable to create file: {}", e),
+  };
+  match file.write_all(&json) {
+    Ok(()) => {}
+    Err(e) => throw!("Error writing file: {}", e),
+  };
   return Ok(());
 }
 
