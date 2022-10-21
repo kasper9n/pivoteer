@@ -1,6 +1,11 @@
-# Pivoteer
-
-App for creating pivot tables for CSV and TSV
+<p align="center">
+  <img src="./assets/Logo.png" width="80">
+</p>
+<h3 align="center">Pivoteer</h3>
+<p align="center">
+  App for creating pivot tables for CSV and TSV
+</p>
+<br/>
 
 ## Dev instructions
 
