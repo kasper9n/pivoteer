@@ -39,7 +39,7 @@ jobs:
       #   uses: tauri-apps/tauri-action@v0
       #   env:
       #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm run build
+      - run: npm run build-commit
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3

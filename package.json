@@ -6,6 +6,7 @@
     "dev": "./bin/bin/cargo-tauri dev",
     "dev:web": "vite",
     "build": "npm run setup && ./bin/bin/cargo-tauri build",
+    "build-commit": "npm run setup && ./bin/bin/cargo-tauri build --config '{\"package\":{ \"version\":\"'$(cargo pkgid --manifest-path src-tauri/Cargo.toml | rev | cut -d@ -f1 | cut -d@ -f1 | rev)+$(git rev-list --max-count=1 HEAD | cut -c 1-7)'\" } }'",
     "build:web": "vite build",
     "test": "echo 'No tests'",
     "lint": "prettier --check --plugin-search-dir=. src *.js && eslint src *.js && svelte-check",
