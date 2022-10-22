@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use typescript_type_def::TypeDef;
 
+use crate::adapters::CsvHeader;
+use crate::throw;
+
 #[derive(Serialize, Deserialize, Debug, TypeDef)]
 pub struct Project {
   pub columns: Vec<Column>,
@@ -52,6 +55,49 @@ pub struct SourceConfig {
   pub isrc: Option<ColumnConfig>,
   pub upc: Option<ColumnConfig>,
   pub revenue: Option<ColumnConfig>,
+  pub filters: Vec<FilterConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+pub enum FilterOperator {
+  Is,
+  IsNot,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+pub struct FilterConfig {
+  pub column: ColumnLocation,
+  pub operator: FilterOperator,
+  pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+pub enum ColumnLocation {
+  Name(String),
+  Index(usize),
+  NameAtIndex(String, usize),
+}
+impl ColumnLocation {
+  pub fn index_from_header(&self, header: &CsvHeader) -> Result<usize, String> {
+    match self {
+      ColumnLocation::Name(name) => header.find_by_name(name),
+      ColumnLocation::Index(index) => {
+        header.row.get(*index)?;
+        Ok(*index)
+      }
+      ColumnLocation::NameAtIndex(name, index) => {
+        let actual_name = header
+          .row
+          .record
+          .get(*index)
+          .ok_or(format!("No column number {}", index + 1))?;
+        if actual_name != name {
+          throw!("No column number {} named {}", index + 1, name);
+        }
+        Ok(*index)
+      }
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]

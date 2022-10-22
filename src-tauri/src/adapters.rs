@@ -9,11 +9,11 @@ pub struct CsvRow {
   pub record: StringRecord,
 }
 impl CsvRow {
-  fn find_by_name(&self, name: &str) -> Result<usize, String> {
+  pub fn find_by_name(&self, name: &str) -> Result<usize, String> {
     let index = self.record.iter().position(|s| s == name);
     index.ok_or(format!("No column named {name}"))
   }
-  fn get(&self, index: usize) -> Result<String, String> {
+  pub fn get(&self, index: usize) -> Result<String, String> {
     Ok(get_cell(&self.record, index)?.to_owned())
   }
 }
@@ -21,9 +21,9 @@ impl CsvRow {
 type CsvIter = csv::StringRecordsIntoIter<BufReader<File>>;
 pub struct CsvHeader<'a> {
   records: &'a mut CsvIter,
-  row: Option<CsvRow>,
+  pub row: CsvRow,
 }
-impl CsvHeader<'_> {
+impl<'a> CsvHeader<'a> {
   fn skip_rows(&mut self, rows: usize) -> Result<(), String> {
     println!("Skipping {rows} pre-header rows");
     for _ in 0..rows {
@@ -34,23 +34,16 @@ impl CsvHeader<'_> {
     }
     Ok(())
   }
-  fn get(&mut self) -> Result<&CsvRow, String> {
-    match self.row {
-      Some(ref row) => return Ok(row),
-      None => {}
-    };
-    self.row = match self.records.next() {
-      Some(Ok(record)) => Some(CsvRow { record }),
+  pub fn from_records(records: &'a mut CsvIter) -> Result<Self, String> {
+    let row = match records.next() {
+      Some(Ok(record)) => CsvRow { record },
       Some(Err(e)) => throw!("Error reading headers: {}", e.to_string()),
       None => throw!("No header row"),
     };
-    match self.row {
-      Some(ref row) => return Ok(row),
-      None => panic!(),
-    };
+    Ok(Self { records, row })
   }
-  fn find_by_name(&mut self, name: &str) -> Result<usize, String> {
-    self.get()?.find_by_name(name)
+  pub fn find_by_name(&self, name: &str) -> Result<usize, String> {
+    self.row.find_by_name(name)
   }
 }
 
@@ -72,8 +65,11 @@ pub fn adapter_csv_settings(kind: &SourceType, reader_builder: &mut ReaderBuilde
     _ => {}
   }
 }
-pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter, String> {
-  let mut header = CsvHeader { records, row: None };
+pub fn adapter<'a>(
+  kind: SourceType,
+  records: &'a mut CsvIter,
+) -> Result<(Adapter, CsvHeader), String> {
+  let mut header = CsvHeader::from_records(records)?;
   let adapter = match kind {
     SourceType::Landr => wrap(Landr::new(&mut header)?),
     SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
@@ -82,7 +78,7 @@ pub fn adapter<'a>(kind: SourceType, records: &'a mut CsvIter) -> Result<Adapter
     SourceType::Symphonic => wrap(Symphonic::new(&mut header)?),
     SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
   };
-  Ok(adapter)
+  Ok((adapter, header))
 }
 
 struct Landr {
@@ -212,11 +208,10 @@ pub struct CustomSource {
 impl CustomSource {
   fn new(header: &mut CsvHeader, config: SourceConfig) -> Result<Self, String> {
     header.skip_rows(config.header_row_index)?;
-    let header_row = header.get()?;
     Ok(Self {
-      isrc: Column::from_config(config.isrc, header_row)?,
-      upc: Column::from_config(config.upc, header_row)?,
-      revenue: Column::from_config(config.revenue, header_row)?,
+      isrc: Column::from_config(config.isrc, &header.row)?,
+      upc: Column::from_config(config.upc, &header.row)?,
+      revenue: Column::from_config(config.revenue, &header.row)?,
     })
   }
 }

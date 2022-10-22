@@ -1,5 +1,5 @@
 use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvRow};
-use crate::project::{Action, Column, ColumnType, Project, Source, SourceType};
+use crate::project::{Action, Column, ColumnType, FilterOperator, Project, Source, SourceType};
 use crate::throw;
 use bigdecimal::BigDecimal;
 use csv;
@@ -39,6 +39,22 @@ pub struct FoundColumn {
 struct Aggregator {
   map: HashMap<Vec<String>, Vec<BigDecimal>>,
   columns: Vec<Column>,
+}
+
+struct Filter {
+  col: usize,
+  operator: FilterOperator,
+  value: String,
+}
+impl Filter {
+  fn passes(&self, record: &csv::StringRecord) -> Result<bool, String> {
+    let value = get_cell(record, self.col)?;
+    let passed = match self.operator {
+      FilterOperator::Is => value == self.value,
+      FilterOperator::IsNot => value != self.value,
+    };
+    Ok(passed)
+  }
 }
 
 impl Aggregator {
@@ -97,7 +113,21 @@ impl Aggregator {
     adapter_csv_settings(&kind, &mut csv_reader_builder);
     let mut csv = csv_reader_builder.from_reader(buf_reader).into_records();
 
-    let adapter = adapter(kind, &mut csv)?;
+    let filter_configs = match &kind {
+      SourceType::Custom(custom) => custom.filters.clone(),
+      _ => vec![],
+    };
+
+    let (adapter, header) = adapter(kind, &mut csv)?;
+
+    let mut filters = Vec::new();
+    for filter_config in filter_configs {
+      filters.push(Filter {
+        col: filter_config.column.index_from_header(&header)?,
+        operator: filter_config.operator,
+        value: filter_config.value.clone(),
+      });
+    }
 
     let mut key_cols = Vec::new();
     let mut value_cols = Vec::new();
@@ -120,6 +150,12 @@ impl Aggregator {
         Ok(record) => record,
         Err(e) => throw!("Error reading record: {}", e.to_string()),
       };
+      for filter in &filters {
+        let passes = filter.passes(&record)?;
+        if !passes {
+          continue;
+        }
+      }
       self.add_csv_record(&adapter, record, &key_cols, &value_cols)?;
     }
     Ok(())

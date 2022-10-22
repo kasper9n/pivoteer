@@ -5,39 +5,43 @@
   import type { Source, SourceType } from '../../bindings'
   import { fade } from 'svelte/transition'
   import ColumnConfig from './ColumnConfig.svelte'
+  import FilterConfigComponent from './FilterConfig.svelte'
 
   export let source: Source
 
-  function kindOptions(): { kind: SourceType; text: string }[] {
-    return [
-      { text: 'Landr', kind: { id: 'Landr' } },
-      { text: 'Pretzel', kind: { id: 'Pretzel' } },
-      { text: 'Repost By SoundCloud', kind: { id: 'RepostBySoundCloud' } },
-      { text: 'Stem', kind: { id: 'Stem' } },
-      { text: 'Symphonic', kind: { id: 'Symphonic' } },
-      {
-        text: 'Custom',
-        kind: {
-          id: 'Custom',
-          content: {
-            header_row_index: 0,
-            isrc: null,
-            upc: null,
-            revenue: null,
-          },
+  const kindOptions: { text: string; kindId: SourceType['id'] }[] = [
+    { text: 'Landr', kindId: 'Landr' },
+    { text: 'Pretzel', kindId: 'Pretzel' },
+    { text: 'Repost By SoundCloud', kindId: 'RepostBySoundCloud' },
+    { text: 'Stem', kindId: 'Stem' },
+    { text: 'Symphonic', kindId: 'Symphonic' },
+    { text: 'Custom', kindId: 'Custom' },
+  ]
+
+  let kindId: SourceType['id']
+  $: getKindId(source)
+  $: setKind(kindId)
+  function getKindId(source: Source) {
+    kindId = source.kind.id
+  }
+  function setKind(kindId: SourceType['id']) {
+    if (source.kind.id === kindId) {
+      return
+    }
+    if (kindId === 'Custom') {
+      source.kind = {
+        id: kindId,
+        content: {
+          header_row_index: 0,
+          isrc: null,
+          upc: null,
+          revenue: null,
+          filters: [],
         },
-      },
-    ]
-  }
-  let kindIndex: number
-  $: getKindIndex(source)
-  $: setKind(kindIndex)
-  function getKindIndex(source: Source) {
-    kindIndex = kindOptions().findIndex((o) => o.kind.id === source.kind.id)
-  }
-  function setKind(index: number) {
-    // this runs on mount, so we don't overwrite `source.kind`
-    source.kind.id = kindOptions()[index].kind.id
+      }
+    } else {
+      source.kind = { id: kindId }
+    }
   }
 
   async function addFiles(files: string[]) {
@@ -64,33 +68,34 @@
   }
 </script>
 
-<section class="my-10">
-  <h2>Source</h2>
+<h2 class="mt">Source</h2>
+<section>
   <div class="row">
     <p>Name:</p>
     <input type="text" bind:value={source.name} />
   </div>
   <div class="row">
     <p>Type:</p>
-    <select bind:value={kindIndex}>
-      {#each kindOptions() as option, i}
-        <option value={i}>{option.text}</option>
+    <select bind:value={kindId}>
+      {#each kindOptions as kindOption}
+        <option value={kindOption.kindId}>{kindOption.text}</option>
       {/each}
     </select>
   </div>
-  <div class="ml">
-    {#if source.kind.id === 'Custom'}
-      <div class="row">
-        <p>Header row index:</p>
-        <input type="number" bind:value={source.kind.content.header_row_index} />
-      </div>
-      <ColumnConfig label="ISRC" bind:column={source.kind.content.isrc} />
-      <ColumnConfig label="UPC" bind:column={source.kind.content.upc} />
-      <ColumnConfig label="Revenue" bind:column={source.kind.content.revenue} />
-    {/if}
-  </div>
 </section>
-<section class="files-section">
+{#if source.kind.id === 'Custom'}
+  <div class="row mt">
+    <p>Header row index:</p>
+    <input type="number" bind:value={source.kind.content.header_row_index} />
+  </div>
+  <ColumnConfig label="ISRC" bind:column={source.kind.content.isrc} />
+  <ColumnConfig label="UPC" bind:column={source.kind.content.upc} />
+  <ColumnConfig label="Revenue" bind:column={source.kind.content.revenue} />
+
+  <div class="mt" />
+  <FilterConfigComponent bind:filters={source.kind.content.filters} />
+{/if}
+<section class="files-section mt">
   <div class="row">
     <h3>Files</h3>
     <button on:click={addFilesDialog}>Add files</button>
@@ -111,18 +116,15 @@
 </FileDrop>
 
 <style lang="sass">
-  .ml
-    margin-left: 40px
-  .my-10
+  .mt
     margin-top: 10px
-    margin-bottom: 10px
   .files
     height: 0px
     flex-grow: 1
     display: flex
     flex-direction: column
     overflow: auto
-  .files-section
+  section.files-section
     flex-grow: 1
     height: 0px
     display: flex
