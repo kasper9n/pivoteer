@@ -14,7 +14,7 @@ tauri-build = { git = "https://github.com/meowtec/tauri", rev = "3ce87d0fecab70e
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 # tauri = { version = "1.1", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open", "window-close"] }
-tauri = { git = "https://github.com/meowtec/tauri", rev = "3ce87d0fecab70e612d9945d1b274f3e58e1bfbd", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open", "window-close"] }
+tauri = { git = "https://github.com/meowtec/tauri", rev = "3ce87d0fecab70e612d9945d1b274f3e58e1bfbd", features = ["clipboard-write-text", "devtools", "dialog-open", "dialog-save", "shell-open", "window-close"] }
 csv = "1.1"
 bigdecimal = "0.3"
 strum_macros = "0.24"

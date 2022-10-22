@@ -3,13 +3,15 @@
   windows_subsystem = "windows"
 )]
 
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use std::thread;
-use tauri::api::dialog::MessageDialogBuilder;
 use tauri::api::{dialog, shell};
 use tauri::{
-  command, AboutMetadata, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, Submenu, Window,
-  WindowBuilder, WindowUrl,
+  command, AboutMetadata, AppHandle, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, State,
+  Submenu, Window, WindowBuilder, WindowUrl,
 };
+use typescript_type_def::TypeDef;
 
 mod adapters;
 mod cmd;
@@ -30,25 +32,36 @@ fn error_popup(msg: String, win: Window) {
   });
 }
 
-fn handle_open_files(files: &[String]) {
-  MessageDialogBuilder::new(
-    "Files open",
-    format!(
-      "You opened: {:?}",
-      files
-        .iter()
-        .map(|f| percent_encoding::percent_decode(f.as_bytes())
-          .decode_utf8_lossy()
-          .into_owned())
-        .collect::<Vec<String>>()
-    ),
-  )
-  .show(|_| {});
+fn handle_open_files(files: &[String], app: &AppHandle) -> Vec<String> {
+  let files = files
+    .iter()
+    .map(|f| {
+      percent_encoding::percent_decode(f.as_bytes())
+        .decode_utf8_lossy()
+        .into_owned()
+    })
+    .collect::<Vec<String>>();
+  app
+    .emit_all("open-file", &files)
+    .expect("open file event failed");
+  files
 }
+
+#[command]
+fn opened_info(state: State<OpenedInfoState>) -> OpenedInfo {
+  let opened_info = state.0.lock().expect("no opened info state");
+  (*opened_info).clone()
+}
+
+#[derive(Serialize, Deserialize, Clone, TypeDef)]
+pub struct OpenedInfo {
+  path: Option<String>,
+}
+pub struct OpenedInfoState(pub Mutex<OpenedInfo>);
 
 fn main() {
   #[cfg(debug_assertions)]
-  project::typegen();
+  typegen();
 
   let ctx = tauri::generate_context!();
 
@@ -64,6 +77,7 @@ fn main() {
         .fullscreen(false)
         .build()
         .expect("Unable to create window");
+      let mut _opened_info = OpenedInfo { path: None };
 
       #[cfg(any(windows, target_os = "linux"))]
       {
@@ -71,14 +85,17 @@ fn main() {
         let argv = env::args().collect::<Vec<_>>();
         if argv.len() > 1 {
           // NOTICE: `argv` may include URL protocol (`your-app-protocol://`) or arguments (`--`) if app supports them.
-          handle_open_files(&argv[1..]);
+          let files = handle_open_files(&argv[1..], app.handle());
+          opened_info.path = files.remove(0);
         }
       }
 
+      app.manage(OpenedInfoState(Mutex::new(OpenedInfo { path: None })));
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
       error_popup,
+      opened_info,
       cmd::generate,
       cmd::open,
       cmd::save,
@@ -158,7 +175,7 @@ fn main() {
     })
     .build(ctx)
     .expect("error while running tauri app")
-    .run(|_app, event| {
+    .run(|app, event| {
       #[cfg(target_os = "macos")]
       if let tauri::RunEvent::OpenURLs(urls) = event {
         // filter out non-file:// urls, you may need to handle them by another method
@@ -173,7 +190,25 @@ fn main() {
           })
           .collect();
 
-        handle_open_files(&file_paths);
+        let mut files = handle_open_files(&file_paths, &app);
+        let opened_info_state = app.state::<OpenedInfoState>();
+        let mut opened_info = opened_info_state.0.lock().expect("no opened info state");
+        opened_info.path = Some(files.remove(0));
       }
     });
+}
+
+#[cfg(debug_assertions)]
+pub fn typegen() {
+  use typescript_type_def::{write_definition_file, DefinitionFileOptions};
+
+  use crate::project::Project;
+  let mut file = std::fs::File::create("../bindings.ts").unwrap();
+  let options = DefinitionFileOptions {
+    root_namespace: None,
+    ..Default::default()
+  };
+  write_definition_file::<_, Project>(&mut file, options).unwrap();
+  write_definition_file::<_, OpenedInfo>(&mut file, options).unwrap();
+  println!("Generated TS types");
 }

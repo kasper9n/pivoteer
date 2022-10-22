@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dialog, event, window as tauriWindow } from '@tauri-apps/api'
   import { onDestroy } from 'svelte'
-  import type { Project } from './bindings'
+  import type { Project, OpenedInfo } from './bindings'
   import ProjectComponent from './components/Project.svelte'
   import { runCmd } from './scripts/helpers'
 
@@ -87,6 +87,21 @@
     file = { path, project }
   }
 
+  runCmd('opened_info').then((value) => {
+    const info = value as OpenedInfo
+    console.log(info)
+    if (info.path) {
+      openProject(info.path)
+    }
+  })
+
+  const unlistenFileOpen = event.listen('open-file', (e) => {
+    const payload = e.payload as string[]
+    if (payload[0]) {
+      openProject(payload[0])
+    }
+  })
+
   async function saveProject(file: File) {
     if (!file.path) {
       const pickedPath = await dialog.save({
@@ -100,7 +115,7 @@
     }
   }
 
-  const unlistenFuture = event.listen('menu', ({ payload }) => {
+  const unlistenMenu = event.listen('menu', ({ payload }) => {
     if (payload === 'New') {
       newProject()
     } else if (payload === 'Open...') {
@@ -116,8 +131,8 @@
     }
   })
   onDestroy(async () => {
-    const unlisten = await unlistenFuture
-    unlisten()
+    ;(await unlistenMenu)()
+    ;(await unlistenFileOpen)()
   })
 </script>
 

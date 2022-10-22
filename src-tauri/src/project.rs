@@ -1,9 +1,8 @@
+use crate::adapters::CsvHeader;
+use crate::throw;
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 use typescript_type_def::TypeDef;
-
-use crate::adapters::CsvHeader;
-use crate::throw;
 
 #[derive(Serialize, Deserialize, Debug, TypeDef)]
 pub struct Project {
@@ -106,16 +105,4 @@ pub enum ColumnConfig {
   Index(usize),
   NameAtIndex(String, usize),
   CustomValue(String),
-}
-
-#[cfg(debug_assertions)]
-pub fn typegen() {
-  use typescript_type_def::{write_definition_file, DefinitionFileOptions};
-  let mut file = std::fs::File::create("../bindings.ts").unwrap();
-  let options = DefinitionFileOptions {
-    root_namespace: None,
-    ..Default::default()
-  };
-  write_definition_file::<_, Project>(&mut file, options).unwrap();
-  println!("Generated TS types");
 }

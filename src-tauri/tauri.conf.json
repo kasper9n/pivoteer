@@ -26,6 +26,7 @@
       "category": "DeveloperTool",
       "fileAssociations": [
         {
+          "name": "Pivoteer",
           "ext": ["pivoteer"],
           "mime_type": ["application/pivoteer"]
         }
