@@ -1,5 +1,7 @@
-/node_modules/
-/build/
+node_modules
+build
 
-/src-tauri/target/
-/src-tauri/WixTools
+src-tauri/target
+src-tauri/WixTools
+
+bin/bin

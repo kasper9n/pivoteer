@@ -4,6 +4,7 @@
 )]
 
 use std::thread;
+use tauri::api::dialog::MessageDialogBuilder;
 use tauri::api::{dialog, shell};
 use tauri::{
   command, AboutMetadata, CustomMenuItem, Manager, Menu, MenuEntry, MenuItem, Submenu, Window,
@@ -29,6 +30,22 @@ fn error_popup(msg: String, win: Window) {
   });
 }
 
+fn handle_open_files(files: &[String]) {
+  MessageDialogBuilder::new(
+    "Files open",
+    format!(
+      "You opened: {:?}",
+      files
+        .iter()
+        .map(|f| percent_encoding::percent_decode(f.as_bytes())
+          .decode_utf8_lossy()
+          .into_owned())
+        .collect::<Vec<String>>()
+    ),
+  )
+  .show(|_| {});
+}
+
 fn main() {
   #[cfg(debug_assertions)]
   project::typegen();
@@ -47,6 +64,17 @@ fn main() {
         .fullscreen(false)
         .build()
         .expect("Unable to create window");
+
+      #[cfg(any(windows, target_os = "linux"))]
+      {
+        // Windows and Linux
+        let argv = env::args().collect::<Vec<_>>();
+        if argv.len() > 1 {
+          // NOTICE: `argv` may include URL protocol (`your-app-protocol://`) or arguments (`--`) if app supports them.
+          handle_open_files(&argv[1..]);
+        }
+      }
+
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -128,6 +156,24 @@ fn main() {
         _ => {}
       }
     })
-    .run(ctx)
-    .expect("error while running tauri app");
+    .build(ctx)
+    .expect("error while running tauri app")
+    .run(|_app, event| {
+      #[cfg(target_os = "macos")]
+      if let tauri::RunEvent::OpenURLs(urls) = event {
+        // filter out non-file:// urls, you may need to handle them by another method
+        let file_paths: Vec<_> = urls
+          .iter()
+          .filter_map(|url| {
+            if url.scheme() == "file" {
+              Some(url.path().into())
+            } else {
+              None
+            }
+          })
+          .collect();
+
+        handle_open_files(&file_paths);
+      }
+    });
 }

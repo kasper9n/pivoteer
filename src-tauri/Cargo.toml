@@ -7,17 +7,23 @@ edition = "2021"
 build = "src/build.rs"
 
 [build-dependencies]
-tauri-build = { version = "1.1", features = [] }
+# tauri-build = { version = "1.1", features = [] }
+tauri-build = { git = "https://github.com/meowtec/tauri", rev = "3ce87d0fecab70e612d9945d1b274f3e58e1bfbd", features = [] }
 
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.1", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open", "window-close"] }
+# tauri = { version = "1.1", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open", "window-close"] }
+tauri = { git = "https://github.com/meowtec/tauri", rev = "3ce87d0fecab70e612d9945d1b274f3e58e1bfbd", features = ["clipboard-write-text", "dialog-open", "dialog-save", "shell-open", "window-close"] }
 csv = "1.1"
 bigdecimal = "0.3"
 strum_macros = "0.24"
 typescript-type-def = "0.5"
 atomicwrites = "0.3.0"
+percent-encoding = "2.2"
+
+[patch.crates-io]
+tao = { git = "https://github.com/meowtec/tao", branch = "feat-open-file" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.24.0"

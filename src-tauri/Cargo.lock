@@ -205,12 +205,11 @@ dependencies = [
 
 [[package]]
 name = "cargo_toml"
-version = "0.11.8"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e72c3ff59e3b7d24630206bb63a73af65da4ed5df1f76ee84dfafb9fee2ba60e"
+checksum = "6a621d5d6d6c8d086dbaf1fe659981da41a1b63c6bdbba30b4dbb592c6d3bd49"
 dependencies = [
  "serde",
- "serde_derive",
  "toml",
 ]
 
@@ -1784,6 +1783,7 @@ dependencies = [
  "cocoa",
  "csv",
  "objc",
+ "percent-encoding",
  "serde",
  "serde_json",
  "strum_macros",
@@ -2445,8 +2445,7 @@ dependencies = [
 [[package]]
 name = "tao"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43336f5d1793543ba96e2a1e75f3a5c7dcd592743be06a0ab3a190f4fcb4b934"
+source = "git+https://github.com/meowtec/tao?branch=feat-open-file#eaa7f09ffcfbdac2ac6a83a01f0068878d6caee3"
 dependencies = [
  "bitflags",
  "cairo-rs",
@@ -2482,6 +2481,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "unicode-segmentation",
+ "url",
  "uuid 1.2.1",
  "windows 0.39.0",
  "windows-implement",
@@ -2502,8 +2502,7 @@ dependencies = [
 [[package]]
 name = "tauri"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efbf22abd61d95ca9b2becd77f9db4c093892f73e8a07d21d8b0b2bf71a7bcea"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "anyhow",
  "cocoa",
@@ -2550,8 +2549,7 @@ dependencies = [
 [[package]]
 name = "tauri-build"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0991fb306849897439dbd4a72e4cbed2413e2eb26cb4b3ba220b94edba8b4b88"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -2566,8 +2564,7 @@ dependencies = [
 [[package]]
 name = "tauri-codegen"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "356fa253e40ae4d6ff02075011f2f2bb4066f5c9d8c1e16ca6912d7b75903ba6"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "base64",
  "brotli",
@@ -2592,8 +2589,7 @@ dependencies = [
 [[package]]
 name = "tauri-macros"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6051fd6940ddb22af452340d03c66a3e2f5d72e0788d4081d91e31528ccdc4d"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "heck 0.4.0",
  "proc-macro2",
@@ -2606,19 +2602,18 @@ dependencies = [
 [[package]]
 name = "tauri-runtime"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d49439a5ea47f474572b854972f42eda2e02a470be5ca9609cc83bb66945abe2"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "gtk",
  "http",
  "http-range",
- "infer",
  "rand 0.8.5",
  "raw-window-handle",
  "serde",
  "serde_json",
  "tauri-utils",
  "thiserror",
+ "url",
  "uuid 1.2.1",
  "webview2-com",
  "windows 0.39.0",
@@ -2627,8 +2622,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime-wry"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28dce920995fd49907aa9bea7249ed1771454f11f7611924c920a1f75fb614d4"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "cocoa",
  "gtk",
@@ -2647,14 +2641,14 @@ dependencies = [
 [[package]]
 name = "tauri-utils"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e8fdae6f29cef959809a3c3afef510c5b715a446a597ab8b791497585363f39"
+source = "git+https://github.com/meowtec/tauri?rev=3ce87d0fecab70e612d9945d1b274f3e58e1bfbd#3ce87d0fecab70e612d9945d1b274f3e58e1bfbd"
 dependencies = [
  "brotli",
  "ctor",
  "glob",
  "heck 0.4.0",
  "html5ever",
+ "infer",
  "json-patch",
  "kuchiki",
  "memchr",

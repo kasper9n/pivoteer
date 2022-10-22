@@ -24,6 +24,12 @@
       "externalBin": [],
       "copyright": "© 2021 kasper.space",
       "category": "DeveloperTool",
+      "fileAssociations": [
+        {
+          "ext": ["pivoteer"],
+          "mime_type": ["application/pivoteer"]
+        }
+      ],
       "shortDescription": "",
       "longDescription": "",
       "deb": {

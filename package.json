@@ -1,10 +1,11 @@
 {
   "private": true,
   "scripts": {
-    "tauri": "tauri",
-    "dev": "tauri dev",
+    "setup": "cargo install --root ./bin --git https://github.com/meowtec/tauri --rev 3ce87d0fecab70e612d9945d1b274f3e58e1bfbd tauri-cli",
+    "tauri": "./bin/bin/cargo-tauri",
+    "dev": "./bin/bin/cargo-tauri dev",
     "dev:web": "vite",
-    "build": "tauri build",
+    "build": "npm run setup && ./bin/bin/cargo-tauri build",
     "build:web": "vite build",
     "test": "echo 'No tests'",
     "lint": "prettier --check --plugin-search-dir=. src *.js && eslint src *.js && svelte-check",
