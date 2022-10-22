@@ -28,8 +28,7 @@
 {#each project.columns as column, i}
   <OutputColumn bind:column remove={() => removeColumn(i)} />
 {/each}
-
-<h3>Generate</h3>
+<br />
 <Generate {project} />
 
 <style lang="sass">

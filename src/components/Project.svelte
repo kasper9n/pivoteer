@@ -6,6 +6,8 @@
 
   export let project: Project
   export let sourceIndex: number | null = null
+  export let freezeEdited: () => void
+  $: sourceIndex, freezeEdited()
 
   let newSourceName: string | null = null
   function addSource() {
