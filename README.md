@@ -20,3 +20,6 @@
 - `npm run build`: Build
 - `npm run lint`: Lint
 - `npm run format`: Format
+
+### Build binaries
+Manually dispatch the `release` workflow, and wait for it to generate artifacts
