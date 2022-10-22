@@ -9,7 +9,7 @@ pub struct CsvRow {
   pub record: StringRecord,
 }
 impl CsvRow {
-  pub fn find_by_name(&self, name: &str) -> Result<usize, String> {
+  pub fn position(&self, name: &str) -> Result<usize, String> {
     let index = self.record.iter().position(|s| s == name);
     index.ok_or(format!("No column named {name}"))
   }
@@ -27,10 +27,12 @@ impl<'a> CsvHeader<'a> {
   fn skip_rows(&mut self, rows: usize) -> Result<(), String> {
     println!("Skipping {rows} pre-header rows");
     for _ in 0..rows {
-      let row = self.records.next();
-      if row.is_none() {
-        throw!("Non-existant {rows} pre-header rows");
-      }
+      let record = match self.records.next() {
+        Some(Ok(record)) => record,
+        Some(Err(e)) => throw!("Error reading a pre-header row: {e}"),
+        None => throw!("No header row"),
+      };
+      self.row = CsvRow { record };
     }
     Ok(())
   }
@@ -42,8 +44,8 @@ impl<'a> CsvHeader<'a> {
     };
     Ok(Self { records, row })
   }
-  pub fn find_by_name(&self, name: &str) -> Result<usize, String> {
-    self.row.find_by_name(name)
+  pub fn position(&self, name: &str) -> Result<usize, String> {
+    self.row.position(name)
   }
 }
 
@@ -65,20 +67,16 @@ pub fn adapter_csv_settings(kind: &SourceType, reader_builder: &mut ReaderBuilde
     _ => {}
   }
 }
-pub fn adapter<'a>(
-  kind: SourceType,
-  records: &'a mut CsvIter,
-) -> Result<(Adapter, CsvHeader), String> {
-  let mut header = CsvHeader::from_records(records)?;
+pub fn adapter<'a>(kind: SourceType, header: &mut CsvHeader) -> Result<Adapter, String> {
   let adapter = match kind {
-    SourceType::Landr => wrap(Landr::new(&mut header)?),
-    SourceType::Pretzel => wrap(Pretzel::new(&mut header)?),
-    SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(&mut header)?),
-    SourceType::Stem => wrap(Stem::new(&mut header)?),
-    SourceType::Symphonic => wrap(Symphonic::new(&mut header)?),
-    SourceType::Custom(config) => wrap(CustomSource::new(&mut header, config)?),
+    SourceType::Landr => wrap(Landr::new(header)?),
+    SourceType::Pretzel => wrap(Pretzel::new(header)?),
+    SourceType::RepostBySoundCloud => wrap(RepostBySoundCloud::new(header)?),
+    SourceType::Stem => wrap(Stem::new(header)?),
+    SourceType::Symphonic => wrap(Symphonic::new(header)?),
+    SourceType::Custom(config) => wrap(CustomSource::new(header, config)?),
   };
-  Ok((adapter, header))
+  Ok(adapter)
 }
 
 struct Landr {
@@ -89,9 +87,9 @@ struct Landr {
 impl Landr {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     Ok(Self {
-      isrc: header.find_by_name("ISRC")?,
-      upc: header.find_by_name("UPC")?,
-      net_earnings: header.find_by_name("Net earnings (USD)")?,
+      isrc: header.position("ISRC")?,
+      upc: header.position("UPC")?,
+      net_earnings: header.position("Net earnings (USD)")?,
     })
   }
 }
@@ -112,8 +110,8 @@ struct Pretzel {
 impl Pretzel {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     Ok(Self {
-      isrc: header.find_by_name("isrc")?,
-      total_revenue: header.find_by_name("total_revenue")?,
+      isrc: header.position("isrc")?,
+      total_revenue: header.position("total_revenue")?,
     })
   }
 }
@@ -136,9 +134,9 @@ impl RepostBySoundCloud {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     header.skip_rows(2)?;
     Ok(Self {
-      isrc: header.find_by_name("ISRC")?,
-      upc: header.find_by_name("UPC")?,
-      revenue: header.find_by_name("Revenue (USD)")?,
+      isrc: header.position("ISRC")?,
+      upc: header.position("UPC")?,
+      revenue: header.position("Revenue (USD)")?,
     })
   }
 }
@@ -160,9 +158,9 @@ struct Stem {
 impl Stem {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     Ok(Self {
-      isrc: header.find_by_name("isrc")?,
-      upc: header.find_by_name("upc")?,
-      net_royalties: header.find_by_name("net_royalties")?,
+      isrc: header.position("isrc")?,
+      upc: header.position("upc")?,
+      net_royalties: header.position("net_royalties")?,
     })
   }
 }
@@ -184,9 +182,9 @@ struct Symphonic {
 impl Symphonic {
   fn new(header: &mut CsvHeader) -> Result<Self, String> {
     Ok(Self {
-      isrc: header.find_by_name("ISRC Code")?,
-      upc: header.find_by_name("UPC Code")?,
-      net_royalties: header.find_by_name("Royalty ($US)")?,
+      isrc: header.position("ISRC Code")?,
+      upc: header.position("UPC Code")?,
+      net_royalties: header.position("Royalty ($US)")?,
     })
   }
 }
@@ -245,8 +243,7 @@ impl Column {
     };
     let column = match config {
       ColumnConfig::Name(name) => {
-        let index = header.record.iter().position(|s| s == name);
-        let index = index.ok_or(format!("No column named {name}"))?;
+        let index = header.position(&name)?;
         Column::Index(index)
       }
       ColumnConfig::Index(index) => {

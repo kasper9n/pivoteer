@@ -1,4 +1,4 @@
-use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvRow};
+use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvHeader, CsvRow};
 use crate::project::{Action, Column, ColumnType, FilterOperator, Project, Source, SourceType};
 use crate::throw;
 use bigdecimal::BigDecimal;
@@ -118,7 +118,13 @@ impl Aggregator {
       _ => vec![],
     };
 
-    let (adapter, header) = adapter(kind, &mut csv)?;
+    let mut header = CsvHeader::from_records(&mut csv)?;
+    let adapter = match adapter(kind, &mut header) {
+      Ok(adapter) => adapter,
+      Err(e) => {
+        throw!("{e}\nHeaders: {:?}", header.row.record);
+      }
+    };
 
     let mut filters = Vec::new();
     for filter_config in filter_configs {

@@ -17,7 +17,6 @@
       generating = true
       outputCsv = await runCmd('generate', { project })
     } catch (err) {
-      popup(String(err))
       outputCsv = null
     }
     generating = false

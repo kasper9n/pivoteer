@@ -80,7 +80,7 @@ pub enum ColumnLocation {
 impl ColumnLocation {
   pub fn index_from_header(&self, header: &CsvHeader) -> Result<usize, String> {
     match self {
-      ColumnLocation::Name(name) => header.find_by_name(name),
+      ColumnLocation::Name(name) => header.position(name),
       ColumnLocation::Index(index) => {
         header.row.get(*index)?;
         Ok(*index)
