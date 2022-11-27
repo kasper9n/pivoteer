@@ -31,7 +31,7 @@
           "mime_type": ["application/pivoteer"]
         }
       ],
-      "shortDescription": "",
+      "shortDescription": "Pivot table generator for CSV and TSV",
       "longDescription": "",
       "deb": {
         "depends": []

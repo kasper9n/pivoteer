@@ -3,7 +3,7 @@
 </p>
 <h3 align="center">Pivoteer</h3>
 <p align="center">
-  App for creating pivot tables for CSV and TSV
+  Pivot table generator for CSV and TSVx
 </p>
 <br/>
 

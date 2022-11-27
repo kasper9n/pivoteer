@@ -1,7 +1,6 @@
 [package]
 name = "pivoteer"
 version = "0.1.0"
-description = "A Tauri App"
 default-run = "pivoteer"
 edition = "2021"
 build = "src/build.rs"
