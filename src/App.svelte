@@ -12,42 +12,23 @@
   let file: File | null = null
   let wasUnopened = true
 
-  // called unnecessarily due to https://github.com/sveltejs/svelte/issues/5689
   function fileUpdated(file: File | null) {
-    if (file) {
-      if (!file.path) {
-        // edited when no file path
-        setEdited(false)
-      } else if (!wasUnopened) {
-        // edited, unless file was just opened
-        setEdited(true)
-      }
+    if (wasUnopened && file?.path) {
+      setEdited(false)
+    } else if (file) {
+      setEdited(true)
     } else {
-      // unedited if no file is open
       setEdited(false)
     }
     wasUnopened = !file
   }
-  wasUnopened = false
   $: fileUpdated(file)
 
   let isEdited = false
   runCmd('set_edited', { edited: false })
-  let editedFrozen = false
-
-  /** workaround for https://github.com/sveltejs/svelte/issues/5689 */
-  function freezeEdited() {
-    editedFrozen = true
-    setTimeout(() => {
-      editedFrozen = false
-    }, 5)
-  }
 
   async function setEdited(edited: boolean) {
     if (isEdited !== edited) {
-      if (edited && editedFrozen) {
-        return
-      }
       await runCmd('set_edited', { edited })
       isEdited = edited
     }
@@ -79,7 +60,6 @@
     })
     if (typeof filePath === 'string') {
       openProject(filePath)
-      freezeEdited()
     }
   }
   async function openProject(path: string) {
@@ -137,7 +117,7 @@
 </script>
 
 {#if file}
-  <ProjectComponent bind:project={file.project} {freezeEdited} />
+  <ProjectComponent bind:project={file.project} />
 {:else}
   <div class="start-page">
     <div class="col">
