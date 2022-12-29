@@ -20,6 +20,7 @@ strum_macros = "0.24"
 typescript-type-def = "0.5"
 atomicwrites = "0.3.0"
 percent-encoding = "2.2"
+chrono = "0.4"
 
 [patch.crates-io]
 tao = { git = "https://github.com/meowtec/tao", branch = "feat-open-file" }
@@ -31,3 +32,6 @@ objc = "0.2.7"
 [features]
 default = [ "custom-protocol" ]
 custom-protocol = [ "tauri/custom-protocol" ]
+
+[profile.dev]
+opt-level = 1

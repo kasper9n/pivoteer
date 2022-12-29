@@ -38,6 +38,7 @@
     file = {
       project: {
         columns: [
+          { name: 'Period', kind: 'Period', action: 'Unique', enabled: true },
           { name: 'ISRC', kind: 'Isrc', action: 'Unique', enabled: true },
           { name: 'UPC', kind: 'Upc', action: 'Unique', enabled: true },
           { name: 'Revenue', kind: 'NetEarnings', action: 'Sum', enabled: true },

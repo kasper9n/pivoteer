@@ -22,6 +22,7 @@ pub enum ColumnType {
   Isrc,
   Upc,
   NetEarnings,
+  Period,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, TypeDef)]
@@ -37,7 +38,7 @@ pub struct Source {
   pub kind: SourceType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Display, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Display, Debug, TypeDef, PartialEq)]
 #[serde(tag = "id", content = "content")]
 pub enum SourceType {
   Landr,
@@ -48,29 +49,30 @@ pub enum SourceType {
   Custom(SourceConfig),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
 pub struct SourceConfig {
   pub header_row_index: usize,
+  pub period: Option<PeriodColumnConfig>,
   pub isrc: Option<ColumnConfig>,
   pub upc: Option<ColumnConfig>,
   pub revenue: Option<ColumnConfig>,
   pub filters: Vec<FilterConfig>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
 pub enum FilterOperator {
   Is,
   IsNot,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
 pub struct FilterConfig {
   pub column: ColumnLocation,
   pub operator: FilterOperator,
   pub value: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
 pub enum ColumnLocation {
   Name(String),
   Index(usize),
@@ -99,10 +101,16 @@ impl ColumnLocation {
   }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, TypeDef)]
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
 pub enum ColumnConfig {
   Name(String),
   Index(usize),
   NameAtIndex(String, usize),
   CustomValue(String),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TypeDef, PartialEq)]
+pub struct PeriodColumnConfig {
+  pub column: ColumnConfig,
+  pub format: String,
 }

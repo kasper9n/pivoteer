@@ -1,4 +1,4 @@
-use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvHeader, CsvRow};
+use crate::adapters::{adapter, adapter_csv_settings, Adapter, CsvHeader, CsvIter, CsvRow};
 use crate::project::{Action, Column, ColumnType, FilterOperator, Project, Source, SourceType};
 use crate::throw;
 use bigdecimal::BigDecimal;
@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Instant;
@@ -28,6 +28,11 @@ fn str_to_dec<'a>(input: &'a str) -> Result<BigDecimal, String> {
     Ok(num) => Ok(num),
     Err(e) => Err(format!("Invalid number: {}", e.to_string())),
   };
+}
+
+pub struct PivotColumns {
+  pub key_columns: Vec<FoundColumn>,
+  pub value_columns: Vec<FoundColumn>,
 }
 
 #[derive(Debug)]
@@ -57,6 +62,28 @@ impl Filter {
   }
 }
 
+fn read_source_file(file_path_s: &String, kind: &SourceType) -> Result<CsvIter, String> {
+  let file_path = Path::new(&file_path_s);
+  let file = match File::open(file_path.clone()) {
+    Ok(file) => file,
+    Err(e) => throw!("{}", e),
+  };
+  let ext = file_path.extension().unwrap_or_default().to_string_lossy();
+  let delimiter = match ext.as_ref() {
+    "tsv" => b'\t',
+    "csv" => b',',
+    ext => throw!("Unsupported file extension {}", ext),
+  };
+  let mut csv_reader_builder = csv::ReaderBuilder::new();
+  csv_reader_builder.delimiter(delimiter).has_headers(false);
+  if kind == &SourceType::RepostBySoundCloud {
+    csv_reader_builder.flexible(true);
+  }
+  adapter_csv_settings(&kind, &mut csv_reader_builder);
+  let csv = csv_reader_builder.from_reader(file).into_records();
+  Ok(csv)
+}
+
 impl Aggregator {
   pub fn new(columns: Vec<Column>) -> Self {
     return Aggregator {
@@ -69,18 +96,17 @@ impl Aggregator {
     &mut self,
     adapter: &Adapter,
     record: csv::StringRecord,
-    key_cols: &Vec<FoundColumn>,
-    value_cols: &Vec<FoundColumn>,
+    pivot_columns: &PivotColumns,
   ) -> Result<(), String> {
     let row = CsvRow { record };
     let mut keys: Vec<String> = Vec::new();
-    for key_col in key_cols {
+    for key_col in &pivot_columns.key_columns {
       let cell = adapter.get(&row, &key_col.kind)?;
       keys.push(cell);
     }
 
     let values = self.map.entry(keys).or_insert(Vec::new());
-    for (i, col) in value_cols.iter().enumerate() {
+    for (i, col) in pivot_columns.value_columns.iter().enumerate() {
       let cell = adapter.get(&row, &col.kind)?;
       let value = str_to_dec(&cell)?;
       match col.action {
@@ -97,28 +123,17 @@ impl Aggregator {
   }
 
   pub fn add_csv(&mut self, file_path: &String, kind: SourceType) -> Result<(), String> {
-    let file_path = Path::new(&file_path);
-    let buf_reader = match File::open(file_path.clone()) {
-      Ok(file) => BufReader::new(file),
-      Err(e) => throw!("Error opening csv: {}", e.to_string()),
+    let mut csv = match read_source_file(file_path, &kind) {
+      Ok(csv) => csv,
+      Err(e) => throw!("Could not open \"{}\": {}", file_path, e),
     };
-    let ext = file_path.extension().unwrap_or_default().to_string_lossy();
-    let delimiter = match ext.as_ref() {
-      "tsv" => b'\t',
-      "csv" => b',',
-      ext => throw!("Unsupported file extension {}", ext),
-    };
-    let mut csv_reader_builder = csv::ReaderBuilder::new();
-    csv_reader_builder.delimiter(delimiter).has_headers(false);
-    adapter_csv_settings(&kind, &mut csv_reader_builder);
-    let mut csv = csv_reader_builder.from_reader(buf_reader).into_records();
 
     let filter_configs = match &kind {
       SourceType::Custom(custom) => custom.filters.clone(),
       _ => vec![],
     };
 
-    let mut header = CsvHeader::from_records(&mut csv)?;
+    let mut header = CsvHeader::extract_from_records(&mut csv)?;
     let adapter = match adapter(kind, &mut header) {
       Ok(adapter) => adapter,
       Err(e) => {
@@ -135,8 +150,10 @@ impl Aggregator {
       });
     }
 
-    let mut key_cols = Vec::new();
-    let mut value_cols = Vec::new();
+    let mut pivot_columns = PivotColumns {
+      key_columns: Vec::new(),
+      value_columns: Vec::new(),
+    };
     for column in &self.columns {
       if !column.enabled {
         continue;
@@ -146,23 +163,22 @@ impl Aggregator {
         kind: column.kind,
       };
       match column.action {
-        Action::Unique => key_cols.push(found_col),
-        _ => value_cols.push(found_col),
+        Action::Unique => pivot_columns.key_columns.push(found_col),
+        _ => pivot_columns.value_columns.push(found_col),
       };
     }
 
-    for record_result in csv {
+    'outer: for record_result in csv {
       let record: csv::StringRecord = match record_result {
         Ok(record) => record,
         Err(e) => throw!("Error reading record: {}", e.to_string()),
       };
       for filter in &filters {
-        let passes = filter.passes(&record)?;
-        if !passes {
-          continue;
+        if !filter.passes(&record)? {
+          break 'outer;
         }
       }
-      self.add_csv_record(&adapter, record, &key_cols, &value_cols)?;
+      self.add_csv_record(&adapter, record, &pivot_columns)?;
     }
     Ok(())
   }
@@ -175,7 +191,10 @@ impl Aggregator {
         .to_string_lossy();
       match self.add_csv(&file, source.kind.clone()) {
         Ok(_) => println!("Scanned {}", filename),
-        Err(e) => throw!("{} - Failed scanning {filename}: {e}", source.kind),
+        Err(e) => throw!(
+          "Failed scanning {} source file \"{filename}\": {e}",
+          source.kind
+        ),
       };
     }
     Ok(())

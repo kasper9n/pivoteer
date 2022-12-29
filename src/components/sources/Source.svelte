@@ -33,6 +33,7 @@
         id: kindId,
         content: {
           header_row_index: 0,
+          period: null,
           isrc: null,
           upc: null,
           revenue: null,
