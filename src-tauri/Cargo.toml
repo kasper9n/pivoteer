@@ -21,6 +21,7 @@ typescript-type-def = "0.5"
 atomicwrites = "0.3.0"
 percent-encoding = "2.2"
 chrono = "0.4"
+csvsc = "2.2"
 
 [patch.crates-io]
 tao = { git = "https://github.com/meowtec/tao", branch = "feat-open-file" }
