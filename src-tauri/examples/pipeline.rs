@@ -10,12 +10,14 @@ pub enum Error {
   Csv,
 }
 
+pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
-pub type Pipe = Box<dyn Iterator<Item = RowResult>>;
+type PipeIterator = dyn Iterator<Item = RowResult>;
+// pub type Pipe = Box<PipeIterator>;
 
 pub struct Pipeline {
   headers: Headers,
-  pipe: Pipe,
+  pipe: Box<PipeIterator>,
 }
 
 impl Pipeline {
@@ -44,46 +46,57 @@ impl Pipeline {
       get_value: F,
       headers: Headers,
     }
-    let state = State {
+    let pipe = Pipe::new(self.pipe).with_state(State {
       get_value,
       headers: self.headers.clone(),
-    };
-    let stateful_pipe = StatefulPipe::new(self.pipe, state);
-    let newpipe = stateful_pipe.map(|row_result, state| {
+    });
+    let newpipe = pipe.map(|row_result, state| {
       let mut row = row_result?;
       let value = (state.get_value)(&state.headers, &row)?;
       row.push_field(&value);
       Ok(row)
     });
 
-    self.pipe.with_state(state);
-
-    // let stateful_iterator =
-    //   StatefulIteratorBuilder::new(self.pipe, state).map(|row_result, state| {
-    //     let mut row = row_result?;
-    //     let value = (state.get_value)(&state.headers, &row)?;
-    //     row.push_field(&value);
-    //     Ok(row)
-    //   });
-
-    self.pipe = Box::new(newpipe);
+    self.pipe = Box::new(newpipe.iterator);
 
     self
   }
 }
-pub struct StatefulPipe<I: Iterator, S> {
-  iterator: I,
+
+pub struct Pipe {
+  iterator: Box<PipeIterator>,
+}
+impl Pipe {
+  pub fn new(iterator: Box<PipeIterator>) -> Self {
+    Self {
+      iterator: Box::new(iterator.into_iter()),
+    }
+  }
+  pub fn with_state<S>(self, state: S) -> StatefulPipeBuilder<S> {
+    StatefulPipeBuilder::new(self.iterator, state)
+  }
+}
+impl Iterator for Pipe {
+  type Item = RowResult;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    self.iterator.next()
+  }
+}
+
+pub struct StatefulPipeBuilder<S> {
+  iterator: Box<PipeIterator>,
   state: S,
 }
-impl<I: Iterator, S> StatefulPipe<I, S> {
-  pub fn new(iterator: I, state: S) -> Self {
+impl<S> StatefulPipeBuilder<S> {
+  pub fn new(iterator: Box<PipeIterator>, state: S) -> Self {
     Self { state, iterator }
   }
-  pub fn map<F>(self, f: F) -> StatefulIterator<I, S, F>
+  pub fn map<F>(self, f: F) -> StatefulPipe<S, F>
   where
-    F: FnMut(I::Item, &mut S) -> I::Item,
+    F: FnMut(RowResult, &mut S) -> RowResult,
   {
-    StatefulIterator {
+    StatefulPipe {
       iterator: self.iterator,
       state: self.state,
       f,
@@ -91,16 +104,16 @@ impl<I: Iterator, S> StatefulPipe<I, S> {
   }
 }
 
-pub struct StatefulIterator<I: Iterator, S, F: FnMut(I::Item, &mut S) -> I::Item> {
-  iterator: I,
+pub struct StatefulPipe<S, F: FnMut(RowResult, &mut S) -> RowResult> {
+  iterator: Box<PipeIterator>,
   state: S,
   f: F,
 }
-impl<I: Iterator, S, F> Iterator for StatefulIterator<I, S, F>
+impl<S, F> Iterator for StatefulPipe<S, F>
 where
-  F: FnMut(I::Item, &mut S) -> I::Item,
+  F: FnMut(RowResult, &mut S) -> RowResult,
 {
-  type Item = I::Item;
+  type Item = RowResult;
 
   fn next(&mut self) -> Option<Self::Item> {
     match self.iterator.next() {
@@ -109,8 +122,6 @@ where
     }
   }
 }
-
-pub type Row = csv::StringRecord;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Headers {
