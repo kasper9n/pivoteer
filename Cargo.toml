@@ -1,0 +1,13 @@
+[package]
+name = "pivoteer"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+csv = "1.1"
+bigdecimal = "0.3"
+chrono = "0.4"
+csv-pipeline = { git = "https://github.com/probablykasper/csv-pipeline", version = "*" }
+
+[profile.dev]
+opt-level = 1
