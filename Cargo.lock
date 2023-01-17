@@ -97,7 +97,7 @@ checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
 dependencies = [
  "bstr",
  "csv-core",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -114,7 +114,7 @@ dependencies = [
 [[package]]
 name = "csv-pipeline"
 version = "0.2.0"
-source = "git+https://github.com/probablykasper/csv-pipeline#5a102fe3177d09a8f341251b092849e1d7cc6106"
+source = "git+https://github.com/probablykasper/csv-pipeline#19802018f812076b1ba1b42633c2ae9cf49e73e7"
 dependencies = [
  "csv",
 ]
@@ -192,6 +192,12 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
+
+[[package]]
+name = "itoa"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fad582f4b9e86b6caa621cabeb0963332d92eea04729ab12892c2533951e6440"
 
 [[package]]
 name = "js-sys"
@@ -282,6 +288,8 @@ dependencies = [
  "chrono",
  "csv",
  "csv-pipeline",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -325,6 +333,31 @@ name = "serde"
 version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.152"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.91"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877c235533714907a8c2464236f5c4b2a17262ef1bd71f38f35ea592c8da6883"
+dependencies = [
+ "itoa 1.0.5",
+ "ryu",
+ "serde",
+]
 
 [[package]]
 name = "syn"
