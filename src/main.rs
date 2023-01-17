@@ -16,6 +16,7 @@ fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
 	for (store, file_paths) in settings {
 		let kind = match store.as_str() {
 			"landr" => SourceKind::Landr,
+			"stem" => SourceKind::Stem,
 			"symphonic" => SourceKind::Symphonic,
 			_ => panic!("Unknown store: {}", store),
 		};
@@ -36,6 +37,7 @@ struct Source {
 #[derive(Copy, Clone)]
 enum SourceKind {
 	Landr,
+	Stem,
 	Symphonic,
 }
 
@@ -67,6 +69,46 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 		})
 		.rename_col("Quantity of sales or streams", "Sales or streams")
 		.rename_col("Net earnings (USD)", "Gross Royalties")
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Sales or streams",
+			"Gross Royalties",
+		])
+}
+
+fn stem(file_path: &PathBuf) -> Pipeline {
+	Pipeline::from_path(file_path)
+		.unwrap()
+		.add_col("Reporting Period", |headers, row| {
+			let year = headers.get_field(&row, "ingest_year").unwrap();
+			let month = headers.get_field(&row, "ingest_month").unwrap();
+			let ingest_date =
+				NaiveDate::parse_from_str(&format!("{year}-{month}-1"), "%Y-%m-%d").unwrap();
+			Ok(reporting_period_of(&ingest_date))
+		})
+		.rename_col("upc", "UPC")
+		.rename_col("isrc", "ISRC")
+		.rename_col("platform", "Store")
+		.rename_col("platform_detail", "Store service")
+		.add_col("Sales or streams", |headers, row| {
+			let downloads = headers.get_field(&row, "downloads").unwrap();
+			let views = headers.get_field(&row, "views").unwrap();
+			if downloads == "0" {
+				Ok(downloads.to_string())
+			} else if views == "0" {
+				Ok(views.to_string())
+			} else {
+				Err(Error::InvalidField(format!(
+					"Both downloads and views are non-zero: {} and {}",
+					downloads, views
+				)))
+			}
+		})
+		.rename_col("net_royalties", "Gross Royalties")
 		.select(vec![
 			"Reporting Period",
 			"UPC",
@@ -136,6 +178,7 @@ fn source(source: &Source) -> Pipeline<'_> {
 	match &source.kind {
 		SourceKind::Landr => landr(&source.file_path),
 		SourceKind::Symphonic => symphonic(&source.file_path),
+		SourceKind::Stem => stem(&source.file_path),
 	}
 }
 
