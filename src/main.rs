@@ -3,6 +3,7 @@ use chrono::{Datelike, NaiveDate};
 use csv_pipeline::{Error, Pipeline, Transformer};
 use regex::Regex;
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::PathBuf;
 use std::{env, fs};
 
@@ -18,6 +19,7 @@ fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
 			"landr" => SourceKind::Landr,
 			"stem" => SourceKind::Stem,
 			"symphonic" => SourceKind::Symphonic,
+			"repost_network" => SourceKind::RepostNetwork,
 			_ => panic!("Unknown store: {}", store),
 		};
 		for file_path in file_paths {
@@ -39,11 +41,16 @@ enum SourceKind {
 	Landr,
 	Stem,
 	Symphonic,
+	RepostNetwork,
 }
 
 /// Get the reporting period that the date is in
 fn reporting_period_of(date: &NaiveDate) -> String {
 	date.with_day(1).unwrap().format("%Y-%m").to_string()
+}
+
+pub fn parse_date(s: &str, fmt: &str) -> Result<NaiveDate, chrono::ParseError> {
+	NaiveDate::parse_from_str(s, fmt)
 }
 
 fn landr(file_path: &PathBuf) -> Pipeline {
@@ -54,7 +61,7 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 			Some(value) => Err(Error::InvalidField(value.to_string())),
 			None => {
 				let date_field = headers.get_field(&row, "Payment Date").unwrap();
-				let date = NaiveDate::parse_from_str(date_field, "%Y-%m-%d").unwrap();
+				let date = parse_date(date_field, "%Y-%m-%d").unwrap();
 				if date <= NaiveDate::from_ymd_opt(2022, 3, 8).unwrap() {
 					Ok(())
 				} else {
@@ -64,10 +71,10 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 		})
 		.add_col("Reporting Period", |headers, row| {
 			let payment_date_s = headers.get_field(&row, "Payment Date").unwrap();
-			let payment_date = NaiveDate::parse_from_str(payment_date_s, "%Y-%m-%d").unwrap();
-			Ok(reporting_period_of(&payment_date))
+			let payment_date = parse_date(payment_date_s, "%Y-%m-%d");
+			Ok(reporting_period_of(&payment_date.unwrap()))
 		})
-		.rename_col("Quantity of sales or streams", "Sales or streams")
+		.rename_col("Quantity of sales or streams", "Units")
 		.rename_col("Net earnings (USD)", "Gross Royalties")
 		.select(vec![
 			"Reporting Period",
@@ -75,7 +82,40 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 			"ISRC",
 			"Store",
 			"Store service",
-			"Sales or streams",
+			"Units",
+			"Gross Royalties",
+		])
+}
+
+fn skip_to_new_header(reader: csv::Reader<File>, n: usize) -> csv::Reader<File> {
+	let mut records = reader.into_records();
+	let header = records.nth(n).unwrap().unwrap();
+	let mut reader = records.into_reader();
+	reader.set_headers(header);
+	reader
+}
+
+fn repost_network(file_path: &PathBuf) -> Pipeline {
+	let file = File::open(file_path).unwrap();
+	let reader = csv::ReaderBuilder::new()
+		.has_headers(false)
+		.flexible(true)
+		.from_reader(file);
+	let reader = skip_to_new_header(reader, 2);
+	Pipeline::from_reader(reader)
+		.unwrap()
+		.rename_col("Reporting Period", "Activity Period")
+		.rename_col("Accounting Period", "Reporting Period")
+		.rename_col("Partner", "Store")
+		.rename_col("Type", "Store service")
+		.rename_col("Revenue (USD)", "Gross Royalties")
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Units",
 			"Gross Royalties",
 		])
 }
@@ -86,15 +126,14 @@ fn stem(file_path: &PathBuf) -> Pipeline {
 		.add_col("Reporting Period", |headers, row| {
 			let year = headers.get_field(&row, "ingest_year").unwrap();
 			let month = headers.get_field(&row, "ingest_month").unwrap();
-			let ingest_date =
-				NaiveDate::parse_from_str(&format!("{year}-{month}-1"), "%Y-%m-%d").unwrap();
-			Ok(reporting_period_of(&ingest_date))
+			let ingest_date = parse_date(&format!("{year}-{month}-1"), "%Y-%m-%d");
+			Ok(reporting_period_of(&ingest_date.unwrap()))
 		})
 		.rename_col("upc", "UPC")
 		.rename_col("isrc", "ISRC")
 		.rename_col("platform", "Store")
 		.rename_col("platform_detail", "Store service")
-		.add_col("Sales or streams", |headers, row| {
+		.add_col("Units", |headers, row| {
 			let downloads = headers.get_field(&row, "downloads").unwrap();
 			let views = headers.get_field(&row, "views").unwrap();
 			if downloads == "0" {
@@ -115,7 +154,7 @@ fn stem(file_path: &PathBuf) -> Pipeline {
 			"ISRC",
 			"Store",
 			"Store service",
-			"Sales or streams",
+			"Units",
 			"Gross Royalties",
 		])
 }
@@ -136,16 +175,15 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 			if reporting_period.starts_with("Q") {
 				match symphonic_quarter(reporting_period) {
 					Some((year, quarter)) => {
-						let date =
-							NaiveDate::from_ymd_opt(year as i32, quarter as u32 * 3, 1).unwrap();
-						return Ok(reporting_period_of(&date));
+						let date = NaiveDate::from_ymd_opt(year as i32, quarter as u32 * 3, 1);
+						return Ok(reporting_period_of(&date.unwrap()));
 					}
 					None => return Err(Error::InvalidField(reporting_period.to_string())),
 				};
 			} else if reporting_period == "JAN-FEB-18" {
 				return Ok("2018-01".to_string());
 			} else {
-				let date = NaiveDate::parse_from_str(&format!("1-{reporting_period}"), "%d-%b-%y");
+				let date = parse_date(&format!("1-{reporting_period}"), "%d-%b-%y");
 				Ok(reporting_period_of(&date.unwrap()))
 			}
 		})
@@ -153,7 +191,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 		.rename_col("ISRC Code", "ISRC")
 		.rename_col("Digital Service Provider", "Store")
 		.rename_col("Delivery", "Store service")
-		.add_col("Sales or streams", |headers, row| {
+		.add_col("Units", |headers, row| {
 			let count = headers.get_field(&row, "Count").unwrap();
 			let is_void = headers.get_field(&row, "Sale or Void").unwrap() == "Void";
 			if is_void && !count.starts_with('-') {
@@ -169,7 +207,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 			"ISRC",
 			"Store",
 			"Store service",
-			"Sales or streams",
+			"Units",
 			"Gross Royalties",
 		])
 }
@@ -177,6 +215,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 fn source(source: &Source) -> Pipeline<'_> {
 	match &source.kind {
 		SourceKind::Landr => landr(&source.file_path),
+		SourceKind::RepostNetwork => repost_network(&source.file_path),
 		SourceKind::Symphonic => symphonic(&source.file_path),
 		SourceKind::Stem => stem(&source.file_path),
 	}
@@ -202,7 +241,7 @@ fn main() {
 				Transformer::new("ISRC").keep_unique(),
 				Transformer::new("Store").keep_unique(),
 				Transformer::new("Store service").keep_unique(),
-				Transformer::new("Sales or streams").sum(0 as i64),
+				Transformer::new("Units").sum(0 as i64),
 				Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
 			]
 		})

@@ -10,7 +10,8 @@ chrono = "0.4"
 csv-pipeline = { git = "https://github.com/probablykasper/csv-pipeline", version = "*" }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
-regex = "1.7.1"
+regex = "1.7"
+csv-core = "0.1"
 
 [profile.dev]
 opt-level = 1
