@@ -1,11 +1,15 @@
 use bigdecimal::BigDecimal;
 use chrono::{Datelike, NaiveDate};
+use csv_pipeline::target::StdoutTarget;
 use csv_pipeline::{Error, Pipeline, Transformer};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 use std::{env, fs};
+use transformers::SumOrKeepTransform;
+
+mod transformers;
 
 type Settings = HashMap<String, Vec<String>>;
 fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
@@ -22,6 +26,7 @@ fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
 			"stem" => SourceKind::Stem,
 			"symphonic" => SourceKind::Symphonic,
 			"repost_network" => SourceKind::RepostNetwork,
+			"repost_network_old" => SourceKind::RepostNetworkOld,
 			_ => panic!("Unknown store: {}", store),
 		};
 		for file_path in file_paths {
@@ -46,6 +51,7 @@ enum SourceKind {
 	Stem,
 	Symphonic,
 	RepostNetwork,
+	RepostNetworkOld,
 }
 
 /// Get the reporting period that the date is in
@@ -171,6 +177,29 @@ fn repost_network(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
+fn repost_network_old(file_path: &PathBuf) -> Pipeline {
+	Pipeline::from_path(file_path)
+		.unwrap()
+		.add_col("Reporting Period", |headers, row| {
+			let accounting_period = headers.get_field(&row, "Accounting Period").unwrap();
+			let accounting_period = parse_date(&format!("{accounting_period} 1"), "%Y %b %d");
+			Ok(reporting_period_of(&accounting_period.unwrap()))
+		})
+		.add_col("Store", |_headers, _row| Ok("".to_string()))
+		.add_col("Store service", |_headers, _row| Ok("".to_string()))
+		.add_col("Units", |_headers, _row| Ok("".to_string()))
+		.rename_col("Revenue (USD)", "Gross Royalties")
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Units",
+			"Gross Royalties",
+		])
+}
+
 fn stem(file_path: &PathBuf) -> Pipeline {
 	Pipeline::from_path(file_path)
 		.unwrap()
@@ -268,6 +297,7 @@ fn source(source: &Source) -> Pipeline<'_> {
 		SourceKind::Landr => landr(&source.file_path),
 		SourceKind::Pretzel | SourceKind::PretzelOldSystem => pretzel(&source.file_path),
 		SourceKind::RepostNetwork => repost_network(&source.file_path),
+		SourceKind::RepostNetworkOld => repost_network_old(&source.file_path),
 		SourceKind::Symphonic => symphonic(&source.file_path),
 		SourceKind::Stem => stem(&source.file_path),
 	}
@@ -285,7 +315,7 @@ fn main() {
 
 	let pipelines: Vec<_> = sources.iter().map(|x| source(&x)).collect();
 
-	let csv = Pipeline::from_pipelines(pipelines)
+	Pipeline::from_pipelines(pipelines)
 		.transform_into(|| {
 			vec![
 				Transformer::new("Reporting Period").keep_unique(),
@@ -293,12 +323,11 @@ fn main() {
 				Transformer::new("ISRC").keep_unique(),
 				Transformer::new("Store").keep_unique(),
 				Transformer::new("Store service").keep_unique(),
-				Transformer::new("Units").sum(0 as i64),
+				Transformer::new("Units").sum_but_keep(0 as i64, ""),
 				Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
 			]
 		})
+		.flush(StdoutTarget::new())
 		.collect_into_string()
 		.unwrap();
-
-	println!("{csv}");
 }
