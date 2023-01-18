@@ -17,6 +17,8 @@ fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
 	for (store, file_paths) in settings {
 		let kind = match store.as_str() {
 			"landr" => SourceKind::Landr,
+			"pretzel" => SourceKind::Pretzel,
+			"pretzel_old_system" => SourceKind::PretzelOldSystem,
 			"stem" => SourceKind::Stem,
 			"symphonic" => SourceKind::Symphonic,
 			"repost_network" => SourceKind::RepostNetwork,
@@ -39,6 +41,8 @@ struct Source {
 #[derive(Copy, Clone)]
 enum SourceKind {
 	Landr,
+	Pretzel,
+	PretzelOldSystem,
 	Stem,
 	Symphonic,
 	RepostNetwork,
@@ -76,6 +80,53 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 		})
 		.rename_col("Quantity of sales or streams", "Units")
 		.rename_col("Net earnings (USD)", "Gross Royalties")
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Units",
+			"Gross Royalties",
+		])
+}
+
+fn pretzel(file_path: &PathBuf) -> Pipeline {
+	Pipeline::from_path(file_path)
+		.unwrap()
+		.add_col("Reporting Period", |headers, row| {
+			let disbursement = headers.get_field(&row, "disbursement").unwrap();
+			let disbursement = parse_date(&format!("1 {disbursement}"), "%d %b %y");
+			Ok(reporting_period_of(&disbursement.unwrap()))
+		})
+		.add_col("UPC", |headers, row| {
+			// UPCs are not always available for reports up to 2020. Pretzel had
+			// an old and new report system in use at once, and the old one lacks UPCs
+			let disbursement = headers.get_field(&row, "disbursement").unwrap();
+			let disbursement = parse_date(&format!("1 {disbursement}"), "%d %b %y").unwrap();
+			if disbursement.year() <= 2020 {
+				let icpn = headers.get_field(&row, "icpn").unwrap_or_default();
+				return Ok(icpn.to_string());
+			}
+			Ok(headers.get_field(&row, "icpn").unwrap().to_string())
+		})
+		.rename_col("isrc", "ISRC")
+		.add_col("Store", |_headers, _row| Ok("Pretzel".to_string()))
+		.add_col("Store service", |_headers, _row| Ok("Pretzel".to_string()))
+		.add_col("Units", |headers, row| {
+			let total_plays = headers
+				.get_field(&row, "total_plays")
+				.unwrap()
+				.parse::<u16>()
+				.unwrap();
+			let downloads = match headers.get_field(&row, "downloads_count") {
+				Some(downloads) => downloads.parse::<u16>().unwrap(),
+				// does not exist in pre-2022 reports
+				None => 0,
+			};
+			Ok((total_plays + downloads).to_string())
+		})
+		.rename_col("total_revenue", "Gross Royalties")
 		.select(vec![
 			"Reporting Period",
 			"UPC",
@@ -215,6 +266,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 fn source(source: &Source) -> Pipeline<'_> {
 	match &source.kind {
 		SourceKind::Landr => landr(&source.file_path),
+		SourceKind::Pretzel | SourceKind::PretzelOldSystem => pretzel(&source.file_path),
 		SourceKind::RepostNetwork => repost_network(&source.file_path),
 		SourceKind::Symphonic => symphonic(&source.file_path),
 		SourceKind::Stem => stem(&source.file_path),
