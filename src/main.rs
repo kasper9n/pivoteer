@@ -20,6 +20,7 @@ fn open_settings<P: Into<PathBuf>>(file_path: P) -> Vec<Source> {
 	let mut sources = Vec::new();
 	for (store, file_paths) in settings {
 		let kind = match store.as_str() {
+			"bandcamp" => SourceKind::Bandcamp,
 			"landr" => SourceKind::Landr,
 			"pretzel" => SourceKind::Pretzel,
 			"pretzel_old_system" => SourceKind::PretzelOldSystem,
@@ -45,6 +46,7 @@ struct Source {
 }
 #[derive(Copy, Clone)]
 enum SourceKind {
+	Bandcamp,
 	Landr,
 	Pretzel,
 	PretzelOldSystem,
@@ -61,6 +63,36 @@ fn reporting_period_of(date: &NaiveDate) -> String {
 
 pub fn parse_date(s: &str, fmt: &str) -> Result<NaiveDate, chrono::ParseError> {
 	NaiveDate::parse_from_str(s, fmt)
+}
+
+fn bandcamp(file_path: &PathBuf) -> Pipeline {
+	Pipeline::from_path(file_path)
+		.unwrap()
+		.filter_col("item type", |item_type| match item_type {
+			"track" | "album" => true,
+			"payout" => false,
+			_ => panic!("Unknown Bandcamp item type \"{item_type}\""),
+		})
+		.add_col("Reporting Period", |headers, row| {
+			let date = headers.get_field(&row, "date").unwrap();
+			let date = parse_date(date, "%m/%d/%y %I:%M%p").unwrap();
+			Ok(reporting_period_of(&date))
+		})
+		.rename_col("upc", "UPC")
+		.rename_col("isrc", "ISRC")
+		.add_col("Store", |_headers, _rows| Ok("Bandcamp".to_string()))
+		.add_col("Store service", |_h, _r| Ok("Bandcamp".to_string()))
+		.rename_col("quantity", "Units")
+		.rename_col("net amount", "Gross Royalties")
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Units",
+			"Gross Royalties",
+		])
 }
 
 fn landr(file_path: &PathBuf) -> Pipeline {
@@ -294,6 +326,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 
 fn source(source: &Source) -> Pipeline<'_> {
 	match &source.kind {
+		SourceKind::Bandcamp => bandcamp(&source.file_path),
 		SourceKind::Landr => landr(&source.file_path),
 		SourceKind::Pretzel | SourceKind::PretzelOldSystem => pretzel(&source.file_path),
 		SourceKind::RepostNetwork => repost_network(&source.file_path),

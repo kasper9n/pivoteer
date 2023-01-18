@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "csv-pipeline"
 version = "0.2.0"
-source = "git+https://github.com/probablykasper/csv-pipeline#4b068ed18373c758c44c4fa086b4b1af1de870c9"
+source = "git+https://github.com/probablykasper/csv-pipeline#b9cb9e9173a7b04929c8fcf3095103f7664d9c54"
 dependencies = [
  "csv",
  "linked-hash-map",
