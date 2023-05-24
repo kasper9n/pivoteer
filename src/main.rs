@@ -183,7 +183,10 @@ fn skip_to_new_header(reader: csv::Reader<File>, n: usize) -> csv::Reader<File> 
 }
 
 fn repost_network(file_path: &PathBuf) -> Pipeline {
-	let file = File::open(file_path).unwrap();
+	let file = match File::open(file_path) {
+		Ok(file) => file,
+		Err(_) => panic!("Could not open file: {}", file_path.to_string_lossy()),
+	};
 	let reader = csv::ReaderBuilder::new()
 		.has_headers(false)
 		.flexible(true)
@@ -276,6 +279,14 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 		})
 		.rename_col("UPC Code", "UPC")
 		.rename_col("ISRC Code", "ISRC")
+		.map_col("UPC", |upc| match upc {
+			"N/A" => Ok("".to_string()),
+			_ => Ok(upc.to_string()),
+		})
+		.map_col("ISRC", |isrc| match isrc {
+			"N/A" => Ok("".to_string()),
+			_ => Ok(isrc.to_string()),
+		})
 		.rename_col("Digital Service Provider", "Store")
 		.rename_col("Delivery", "Store service")
 		.add_col("Units", |headers, row| {
@@ -310,23 +321,51 @@ fn source(source: &Source) -> Pipeline<'_> {
 	}
 }
 
-fn main() {
+fn get_sources() -> Vec<Source> {
 	let settings_path = match env::args().nth(1) {
 		Some(arg) => arg,
 		None => {
-			eprintln!("No Settings.json argument given");
-			return;
+			panic!("No Sources.toml argument given");
 		}
 	};
-	let sources = open_settings(&settings_path);
+	open_settings(&settings_path)
+}
 
+fn main() {
+	full_earnings_report();
+	// artist_statement();
+}
+
+pub fn full_earnings_report() {
+	let sources = get_sources();
+	let pipelines = sources.iter().map(|x| source(&x));
+
+	Pipeline::from_pipelines(pipelines.collect())
+		.transform_into(|| {
+			vec![
+				Transformer::new("Revenue")
+					.from_col("Gross Royalties")
+					.sum(BigDecimal::from(0)),
+				Transformer::new("ISRC").keep_unique(),
+				Transformer::new("UPC").keep_unique(),
+			]
+		})
+		.flush(StdoutTarget::new())
+		.flush(PathTarget::new("reports/Full.csv"))
+		.collect_into_string()
+		.unwrap();
+}
+
+pub fn artist_statement() {
+	let artist_name = "M.I.M.E";
+	let artist_isrcs = vec![];
+
+	let sources = get_sources();
 	let pipelines = sources.iter().map(|x| {
-		source(&x)
-		// .filter(|headers, row| {
-		// 	let isrc = headers.get_field(&row, "ISRC").unwrap();
-		// 	let upc = headers.get_field(&row, "UPC").unwrap();
-		// 	isrc == ?
-		// })
+		source(&x).filter(|headers, row| {
+			let isrc = headers.get_field(&row, "ISRC").unwrap();
+			artist_isrcs.contains(&isrc)
+		})
 	});
 
 	Pipeline::from_pipelines(pipelines.collect())
@@ -342,7 +381,7 @@ fn main() {
 			]
 		})
 		.flush(StdoutTarget::new())
-		.flush(PathTarget::new("output.csv"))
+		.flush(PathTarget::new(format!("reports/{artist_name} Report.csv")))
 		.collect_into_string()
 		.unwrap();
 }

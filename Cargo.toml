@@ -7,7 +7,7 @@ edition = "2021"
 csv = "1.1"
 bigdecimal = "0.3"
 chrono = "0.4"
-csv-pipeline = { git = "https://github.com/probablykasper/csv-pipeline", version = "*" }
+csv-pipeline = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.7"
 regex = "1.7"
