@@ -1,7 +1,8 @@
 use bigdecimal::BigDecimal;
 use chrono::{Datelike, NaiveDate};
-use csv_pipeline::target::{PathTarget, StdoutTarget};
+use csv_pipeline::target::PathTarget;
 use csv_pipeline::{Error, Pipeline, Transformer};
+use rayon::prelude::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
@@ -339,20 +340,34 @@ fn main() {
 	// artist_statement();
 }
 
+pub fn select_earnings_report_columns(pipeline: Pipeline) -> Pipeline {
+	pipeline.transform_into(|| {
+		vec![
+			Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
+			Transformer::new("ISRC").keep_unique(),
+			Transformer::new("UPC").keep_unique(),
+		]
+	})
+}
+
 pub fn full_earnings_report() {
 	let sources = get_sources();
-	let pipelines = sources.iter().map(|x| source(&x));
-
-	Pipeline::from_pipelines(pipelines.collect())
-		.transform_into(|| {
-			vec![
-				Transformer::new("Revenue")
-					.from_col("Gross Royalties")
-					.sum(BigDecimal::from(0)),
-				Transformer::new("ISRC").keep_unique(),
-				Transformer::new("UPC").keep_unique(),
-			]
+	let files: Vec<_> = sources
+		.iter()
+		.par_bridge()
+		.into_par_iter()
+		.map(|x| {
+			select_earnings_report_columns(source(&x))
+				.collect_into_rows()
+				.unwrap()
 		})
+		.collect();
+	let pipelines = files.into_iter().map(|rows| {
+		return Pipeline::from_rows(rows).unwrap();
+	});
+
+	let funnel_pipeline = Pipeline::from_pipelines(pipelines);
+	select_earnings_report_columns(funnel_pipeline)
 		.flush(PathTarget::new("reports/Full.csv"))
 		.run()
 		.unwrap();
@@ -371,6 +386,7 @@ pub fn artist_statement() {
 	});
 
 	Pipeline::from_pipelines(pipelines.collect())
+	Pipeline::from_pipelines(pipelines)
 		.transform_into(|| {
 			vec![
 				Transformer::new("Reporting Period").keep_unique(),
