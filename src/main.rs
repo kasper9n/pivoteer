@@ -261,6 +261,9 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 
 	Pipeline::from_path(file_path)
 		.unwrap()
+		.filter_col("Digital Service Provider", |dsp| {
+			dsp != "Balance Forwarded From Previous Quarter"
+		})
 		.map_col("Reporting Period", |reporting_period| {
 			if reporting_period.starts_with("Q") {
 				match symphonic_quarter(reporting_period) {
@@ -310,7 +313,7 @@ fn symphonic(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
-fn source(source: &Source) -> Pipeline<'_> {
+fn source(source: &Source) -> Pipeline {
 	match &source.kind {
 		SourceKind::Bandcamp => bandcamp(&source.file_path),
 		SourceKind::Landr => landr(&source.file_path),
@@ -350,9 +353,8 @@ pub fn full_earnings_report() {
 				Transformer::new("UPC").keep_unique(),
 			]
 		})
-		.flush(StdoutTarget::new())
 		.flush(PathTarget::new("reports/Full.csv"))
-		.collect_into_string()
+		.run()
 		.unwrap();
 }
 
@@ -380,8 +382,7 @@ pub fn artist_statement() {
 				Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
 			]
 		})
-		.flush(StdoutTarget::new())
 		.flush(PathTarget::new(format!("reports/{artist_name} Report.csv")))
-		.collect_into_string()
+		.run()
 		.unwrap();
 }
