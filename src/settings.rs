@@ -70,11 +70,9 @@ pub struct Track {
 	pub main_isrc: String,
 	pub secondary_isrcs: Option<Vec<String>>,
 	pub single_upc: Option<u64>,
-	pub ep_upc: Option<u64>,
-	pub compilation_upc: Option<u64>,
 	pub title: String,
 	pub max_recoup: BigDecimal,
-	pub recoup: BigDecimal,
+	pub expenses: BigDecimal,
 	pub label_share: BigDecimal,
 	pub splits: Vec<Split>,
 }

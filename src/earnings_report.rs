@@ -2,14 +2,14 @@ use crate::settings::{Album, Settings, Track};
 use crate::sources::Source;
 use bigdecimal::{BigDecimal, FromPrimitive};
 use csv_pipeline::{Pipeline, Transformer};
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
 pub struct Project {
-	accounting_periods: Vec<AccountingPeriod>,
+	pub accounting_periods: Vec<AccountingPeriod>,
 	/// We use a vec because multiple ISRCs can point to the same Track
 	tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
@@ -76,30 +76,23 @@ impl Project {
 		let settings = Settings::from_path(settings_path);
 		Self::new(project_dir, settings)
 	}
-	pub fn get_all_sources(&self) -> Vec<Source> {
-		self.accounting_periods
-			.iter()
-			.map(|accounting_period| accounting_period.sources.clone())
-			.flatten()
-			.collect()
-	}
 	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
 		let index = *self.isrcs.get(isrc)?;
 		Some(&self.tracks[index])
 	}
 }
 
-struct AccountingPeriod {
+pub struct AccountingPeriod {
 	name: String,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
-	fn generate_earnings_report(&self) -> String {
+	fn generate_sales_report_csv_str(&self) -> String {
 		let files: Vec<_> = self
 			.sources
 			.par_iter()
 			.map(|source| {
-				into_earnings_report(source.process_source())
+				into_sales_report(source.process_source())
 					.collect_into_rows()
 					.unwrap()
 			})
@@ -111,21 +104,13 @@ impl AccountingPeriod {
 			.collect_into_string()
 			.unwrap()
 	}
-	fn generate_royalty_map(&self) -> RoyaltyMap {
-		let earnings_report = self.generate_earnings_report();
-		let mut rdr = csv::Reader::from_reader(earnings_report.as_bytes());
-
-		let mut royalty_map = RoyaltyMap::new();
-
-		for result in rdr.deserialize() {
-			let record: EarningsReportRecord = result.unwrap();
-			royalty_map.add_earnings_report_record(record);
-		}
-		royalty_map
+	pub fn generate_sales_report(&self) -> SalesReport {
+		let sales_report_csv = self.generate_sales_report_csv_str();
+		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
 	}
 }
 
-pub fn into_earnings_report(pipeline: Pipeline) -> Pipeline {
+pub fn into_sales_report(pipeline: Pipeline) -> Pipeline {
 	pipeline.transform_into(|| {
 		vec![
 			Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
@@ -136,7 +121,7 @@ pub fn into_earnings_report(pipeline: Pipeline) -> Pipeline {
 }
 
 #[derive(Deserialize)]
-struct EarningsReportRecord {
+struct SalesReportRecord {
 	#[serde(rename = "Gross Royalties")]
 	gross_royalties: BigDecimal,
 	#[serde(rename = "ISRC")]
@@ -145,18 +130,28 @@ struct EarningsReportRecord {
 	upc: String,
 }
 
-struct RoyaltyMap {
+pub struct SalesReport {
 	isrc_map: HashMap<String, BigDecimal>,
 	upc_map: HashMap<u64, BigDecimal>,
+	accounting_period_name: String,
 }
-impl RoyaltyMap {
-	fn new() -> Self {
-		Self {
+impl SalesReport {
+	fn from_csv_str(sales_report_csv: String, accounting_period_name: String) -> Self {
+		let mut rdr = csv::Reader::from_reader(sales_report_csv.as_bytes());
+
+		let mut sales_report = Self {
 			isrc_map: HashMap::new(),
 			upc_map: HashMap::new(),
+			accounting_period_name,
+		};
+
+		for result in rdr.deserialize() {
+			let record: SalesReportRecord = result.unwrap();
+			sales_report.add_sales_report_record(record);
 		}
+		sales_report
 	}
-	fn add_earnings_report_record(&mut self, record: EarningsReportRecord) {
+	fn add_sales_report_record(&mut self, record: SalesReportRecord) {
 		if record.isrc != "" {
 			let entry = self
 				.isrc_map
@@ -180,26 +175,10 @@ impl RoyaltyMap {
 			);
 		}
 	}
-}
+	pub fn into_track_sales_report(self, project: &Project) -> TracksSalesReport {
+		let mut isrc_report_map = self.isrc_map;
 
-#[derive(Debug)]
-struct TrackReportRow {
-	gross_royalties: BigDecimal,
-	recoupment: BigDecimal,
-	isrc: String,
-}
-#[derive(Debug)]
-struct TracksReport {
-	tracks: HashMap<String, TrackReportRow>,
-	accounting_period_name: String,
-}
-
-impl TracksReport {
-	fn generate(accounting_period: &AccountingPeriod, project: &Project) -> TracksReport {
-		let royalty_map = accounting_period.generate_royalty_map();
-		let mut isrc_report_map = royalty_map.isrc_map;
-
-		for (upc, gross_royalty) in royalty_map.upc_map {
+		for (upc, gross_royalty) in self.upc_map {
 			let album = match project.albums.get(&upc) {
 				Some(album) => album,
 				None => {
@@ -208,9 +187,9 @@ impl TracksReport {
 				}
 			};
 			let album_len = BigDecimal::from_usize(album.isrcs.len()).unwrap();
-			let earnings_per_track = gross_royalty / album_len;
+			let sales_revenue_per_track = gross_royalty / album_len;
 			for isrc in album.isrcs.clone() {
-				*isrc_report_map.entry(isrc).or_default() += earnings_per_track.clone()
+				*isrc_report_map.entry(isrc).or_default() += sales_revenue_per_track.clone()
 			}
 		}
 		let tracks_map = isrc_report_map
@@ -220,31 +199,29 @@ impl TracksReport {
 					Some(val) => val,
 					None => panic!("No track with ISRC {}", isrc),
 				};
-				let row = TrackReportRow {
-					gross_royalties,
-					recoupment: track.recoup.clone(),
+				let row = TrackSalesReportRow {
 					isrc: isrc.clone(),
+					title: track.title.clone(),
+					gross_royalties,
 				};
 				(isrc, row)
 			})
 			.collect();
-		TracksReport {
+		TracksSalesReport {
 			tracks: tracks_map,
-			accounting_period_name: accounting_period.name.clone(),
+			accounting_period_name: self.accounting_period_name,
 		}
 	}
 }
 
-pub fn generate_all() {
-	let project = Project::load();
-
-	let reports: Vec<_> = project
-		.accounting_periods
-		.par_iter()
-		.map(|accounting_period| TracksReport::generate(accounting_period, &project))
-		.collect();
-	for report in reports {
-		println!("=== --- --- --- --- {}", report.accounting_period_name);
-		println!("{:#?}", report.tracks);
-	}
+#[derive(Debug)]
+pub struct TrackSalesReportRow {
+	pub isrc: String,
+	pub title: String,
+	pub gross_royalties: BigDecimal,
+}
+#[derive(Debug)]
+pub struct TracksSalesReport {
+	pub tracks: HashMap<String, TrackSalesReportRow>,
+	pub accounting_period_name: String,
 }
