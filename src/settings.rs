@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -9,6 +10,8 @@ use crate::sources::{Source, SourceKind};
 #[serde(deny_unknown_fields)]
 pub struct Settings {
 	pub accounting_periods: Vec<AccountingPeriodInfo>,
+	pub tracks: Vec<Track>,
+	pub albums: Vec<Album>,
 }
 impl Settings {
 	pub fn from_path(file_path: PathBuf) -> Self {
@@ -50,4 +53,45 @@ impl AccountingPeriodInfo {
 			.flatten()
 			.collect()
 	}
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Album {
+	pub upc: u64,
+	pub title: String,
+	pub isrcs: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Track {
+	#[serde(rename = "isrc")]
+	pub main_isrc: String,
+	pub secondary_isrcs: Option<Vec<String>>,
+	pub single_upc: Option<u64>,
+	pub ep_upc: Option<u64>,
+	pub compilation_upc: Option<u64>,
+	pub title: String,
+	pub max_recoup: BigDecimal,
+	pub recoup: BigDecimal,
+	pub label_share: BigDecimal,
+	pub splits: Vec<Split>,
+}
+
+impl Track {
+	pub fn isrcs(&self) -> Vec<String> {
+		let mut isrcs = vec![self.main_isrc.clone()];
+		if let Some(secondary_isrcs) = &self.secondary_isrcs {
+			isrcs.extend(secondary_isrcs.clone());
+		}
+		isrcs
+	}
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Split {
+	pub share: BigDecimal,
+	pub name: String,
 }

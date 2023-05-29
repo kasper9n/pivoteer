@@ -1,14 +1,19 @@
-use crate::settings::Settings;
+use crate::settings::{Album, Settings, Track};
 use crate::sources::Source;
-use bigdecimal::BigDecimal;
-use csv_pipeline::target::StdoutTarget;
+use bigdecimal::{BigDecimal, FromPrimitive};
 use csv_pipeline::{Pipeline, Transformer};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
 pub struct Project {
 	accounting_periods: Vec<AccountingPeriod>,
+	/// We use a vec because multiple ISRCs can point to the same Track
+	tracks: Vec<Track>,
+	isrcs: HashMap<String, usize>,
+	albums: HashMap<u64, Album>,
 }
 impl Project {
 	fn new(dir: PathBuf, settings: Settings) -> Self {
@@ -23,8 +28,42 @@ impl Project {
 				}
 			})
 			.collect();
-
-		Project { accounting_periods }
+		let isrcs = {
+			let mut isrc_map = HashMap::new();
+			for (i, track) in settings.tracks.iter().enumerate() {
+				for isrc in track.isrcs() {
+					let old_vaue = isrc_map.insert(isrc.clone(), i);
+					if old_vaue.is_some() {
+						panic!("Duplicate ISRC found: {}", isrc);
+					}
+				}
+			}
+			isrc_map
+		};
+		let albums = {
+			let mut album_map = HashMap::new();
+			for album in settings.albums {
+				if album.isrcs.is_empty() {
+					panic!("Empty album {}", album.upc);
+				}
+				let old_vaue = album_map.insert(album.upc.clone(), album.clone());
+				if old_vaue.is_some() {
+					panic!("Duplicate UPC found: {}", album.upc);
+				}
+				for isrc in album.isrcs {
+					if !isrcs.contains_key(&isrc) {
+						panic!("Album {} contains non-existant ISRC {}", album.upc, isrc);
+					}
+				}
+			}
+			album_map
+		};
+		Project {
+			accounting_periods,
+			tracks: settings.tracks,
+			isrcs,
+			albums,
+		}
 	}
 	pub fn load() -> Self {
 		let settings_path = match env::args().nth(1) {
@@ -44,6 +83,10 @@ impl Project {
 			.flatten()
 			.collect()
 	}
+	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
+		let index = *self.isrcs.get(isrc)?;
+		Some(&self.tracks[index])
+	}
 }
 
 struct AccountingPeriod {
@@ -51,7 +94,7 @@ struct AccountingPeriod {
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
-	fn generate(&self) {
+	fn generate_earnings_report(&self) -> String {
 		let files: Vec<_> = self
 			.sources
 			.par_iter()
@@ -64,12 +107,21 @@ impl AccountingPeriod {
 		let pipelines = files.into_iter().map(|rows| {
 			return Pipeline::from_rows(rows).unwrap();
 		});
-		let funnel_pipeline = Pipeline::from_pipelines(pipelines);
-		into_earnings_report(funnel_pipeline)
-			// .flush(PathTarget::new(format!("reports/{}.csv", self.name)))
-			.flush(StdoutTarget::new())
-			.run()
-			.unwrap();
+		Pipeline::from_pipelines(pipelines)
+			.collect_into_string()
+			.unwrap()
+	}
+	fn generate_royalty_map(&self) -> RoyaltyMap {
+		let earnings_report = self.generate_earnings_report();
+		let mut rdr = csv::Reader::from_reader(earnings_report.as_bytes());
+
+		let mut royalty_map = RoyaltyMap::new();
+
+		for result in rdr.deserialize() {
+			let record: EarningsReportRecord = result.unwrap();
+			royalty_map.add_earnings_report_record(record);
+		}
+		royalty_map
 	}
 }
 
@@ -83,32 +135,116 @@ pub fn into_earnings_report(pipeline: Pipeline) -> Pipeline {
 	})
 }
 
+#[derive(Deserialize)]
+struct EarningsReportRecord {
+	#[serde(rename = "Gross Royalties")]
+	gross_royalties: BigDecimal,
+	#[serde(rename = "ISRC")]
+	isrc: String,
+	#[serde(rename = "UPC")]
+	upc: String,
+}
+
+struct RoyaltyMap {
+	isrc_map: HashMap<String, BigDecimal>,
+	upc_map: HashMap<u64, BigDecimal>,
+}
+impl RoyaltyMap {
+	fn new() -> Self {
+		Self {
+			isrc_map: HashMap::new(),
+			upc_map: HashMap::new(),
+		}
+	}
+	fn add_earnings_report_record(&mut self, record: EarningsReportRecord) {
+		if record.isrc != "" {
+			let entry = self
+				.isrc_map
+				.entry(record.isrc)
+				.or_insert(record.gross_royalties.clone());
+			*entry += record.gross_royalties;
+		} else if record.upc != "" {
+			let upc = record
+				.upc
+				.parse::<u64>()
+				.expect(&format!("Invalid UPC {}", record.upc));
+			let entry = self
+				.upc_map
+				.entry(upc)
+				.or_insert(record.gross_royalties.clone());
+			*entry += record.gross_royalties;
+		} else {
+			println!(
+				"Missing UPC & ISRC in row with gross royalties of {}",
+				record.gross_royalties
+			);
+		}
+	}
+}
+
+#[derive(Debug)]
+struct TrackReportRow {
+	gross_royalties: BigDecimal,
+	recoupment: BigDecimal,
+	isrc: String,
+}
+#[derive(Debug)]
+struct TracksReport {
+	tracks: HashMap<String, TrackReportRow>,
+	accounting_period_name: String,
+}
+
+impl TracksReport {
+	fn generate(accounting_period: &AccountingPeriod, project: &Project) -> TracksReport {
+		let royalty_map = accounting_period.generate_royalty_map();
+		let mut isrc_report_map = royalty_map.isrc_map;
+
+		for (upc, gross_royalty) in royalty_map.upc_map {
+			let album = match project.albums.get(&upc) {
+				Some(album) => album,
+				None => {
+					println!("No album with UPC {}", upc);
+					continue;
+				}
+			};
+			let album_len = BigDecimal::from_usize(album.isrcs.len()).unwrap();
+			let earnings_per_track = gross_royalty / album_len;
+			for isrc in album.isrcs.clone() {
+				*isrc_report_map.entry(isrc).or_default() += earnings_per_track.clone()
+			}
+		}
+		let tracks_map = isrc_report_map
+			.into_iter()
+			.map(|(isrc, gross_royalties)| {
+				let track = match project.get_track(&isrc) {
+					Some(val) => val,
+					None => panic!("No track with ISRC {}", isrc),
+				};
+				let row = TrackReportRow {
+					gross_royalties,
+					recoupment: track.recoup.clone(),
+					isrc: isrc.clone(),
+				};
+				(isrc, row)
+			})
+			.collect();
+		TracksReport {
+			tracks: tracks_map,
+			accounting_period_name: accounting_period.name.clone(),
+		}
+	}
+}
+
 pub fn generate_all() {
 	let project = Project::load();
-	let accounting_periods = project.accounting_periods;
 
-	accounting_periods.par_iter().for_each(|accounting_period| {
-		accounting_period.generate();
-	});
-
-	// for accounting_period in project.accounting_periods {
-	// 	let files: Vec<_> = accounting_period
-	// 		.sources
-	// 		.par_iter()
-	// 		.map(|source| {
-	// 			into_earnings_report(source.process_source())
-	// 				.collect_into_rows()
-	// 				.unwrap()
-	// 		})
-	// 		.collect();
-	// 	let pipelines = files.into_iter().map(|rows| {
-	// 		return Pipeline::from_rows(rows).unwrap();
-	// 	});
-	// }
-
-	// let funnel_pipeline = Pipeline::from_pipelines(pipelines);
-	// into_earnings_report(funnel_pipeline)
-	// 	.flush(PathTarget::new("reports/Full.csv"))
-	// 	.run()
-	// 	.unwrap();
+	let reports: Vec<_> = project
+		.accounting_periods
+		.par_iter()
+		.map(|accounting_period| TracksReport::generate(accounting_period, &project))
+		.collect();
+	for report in reports {
+		println!("=== --- --- --- --- {}", report.accounting_period_name);
+		println!("{:#?}", report.tracks);
+	}
 }
