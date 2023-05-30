@@ -1,15 +1,18 @@
-use crate::settings::{Album, Settings, Track};
+use crate::settings::{Album, Recoupment, Settings, Track};
 use crate::sources::Source;
+use anyhow::{bail, ensure, Result};
 use bigdecimal::{BigDecimal, FromPrimitive};
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct Project {
+	pub data_file_path: PathBuf,
 	pub accounting_periods: Vec<AccountingPeriod>,
+	pub recoupments: Vec<Recoupment>,
 	/// We use a vec because multiple ISRCs can point to the same Track
 	tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
@@ -24,6 +27,7 @@ impl Project {
 				let sources = accounting_period.to_sources(&dir);
 				AccountingPeriod {
 					name: accounting_period.name,
+					previous_period: accounting_period.previous_period,
 					sources,
 				}
 			})
@@ -58,32 +62,151 @@ impl Project {
 			}
 			album_map
 		};
+		let data_file_path = dir.join(settings.inernal_data_file);
+		if !Path::exists(&data_file_path) {
+			panic!("Internal data file not found: {:?}", data_file_path);
+		}
 		Project {
+			data_file_path,
+			recoupments: settings.recoupments,
 			accounting_periods,
 			tracks: settings.tracks,
 			isrcs,
 			albums,
 		}
 	}
-	pub fn load() -> Self {
+	pub fn load() -> Result<Self> {
 		let settings_path = match env::args().nth(1) {
 			Some(arg) => PathBuf::from(arg),
-			None => {
-				panic!("No Sources.toml argument given");
-			}
+			None => bail!("No Sources.toml argument given"),
 		};
 		let project_dir = settings_path.parent().unwrap().to_owned();
 		let settings = Settings::from_path(settings_path);
-		Self::new(project_dir, settings)
+		Ok(Self::new(project_dir, settings))
+	}
+	pub fn verify(&self) -> Result<()> {
+		if !Path::exists(&self.data_file_path) {
+			bail!("Internal data file not found: {:?}", self.data_file_path);
+		}
+		self.verify_accounting_periods()?;
+		self.verify_recoupments()?;
+		Ok(())
+	}
+	fn verify_accounting_periods(&self) -> Result<()> {
+		if self.accounting_periods.is_empty() {
+			bail!("No accounting periods found")
+		}
+
+		let mut accounting_periods_iter = self.accounting_periods.iter().peekable();
+		while let Some(accounting_period) = accounting_periods_iter.next() {
+			ensure!(
+				accounting_period.name != "Initial",
+				"Accounting periods cannot be named \"Initial\"",
+			);
+			if let Some(next_accounting_period) = accounting_periods_iter.peek() {
+				ensure!(
+					next_accounting_period.previous_period == accounting_period.name,
+					"Accounting period \"{}\" has previous_period \"{}\", but previous is named \"{}\"",
+					next_accounting_period.name,
+					next_accounting_period.previous_period,
+					accounting_period.name,
+				)
+			}
+		}
+		Ok(())
+	}
+	fn verify_recoupments(&self) -> Result<()> {
+		let mut track_recoupments = HashMap::new();
+		for recoupment in &self.recoupments {
+			let track = match self.get_track_by_main_isrc(&recoupment.isrc) {
+				Some(track) => track,
+				None => bail!("Recoupment has a non-existent ISRC {}", recoupment.isrc),
+			};
+			ensure!(
+				recoupment.name == track.title,
+				"Recoupment track title mismatch:\n{}\n{}",
+				recoupment.name,
+				track.title,
+			);
+			let track_recoupment =
+				track_recoupments
+					.entry(track.main_isrc.clone())
+					.or_insert(Recoupment {
+						isrc: recoupment.isrc.clone(),
+						date: recoupment.date.clone(),
+						expense: BigDecimal::from(0),
+						recoup: BigDecimal::from(0),
+						name: recoupment.name.clone(),
+					});
+			track_recoupment.expense += recoupment.expense.clone();
+			track_recoupment.recoup += recoupment.recoup.clone();
+			ensure!(
+				track_recoupment.recoup <= track.max_recoup,
+				"Track recoupment exceeds max_group: {}",
+				track_recoupment.name,
+			);
+			ensure!(
+				track_recoupment.recoup <= track_recoupment.expense,
+				"{} track recoupment exceeds expenses: {}",
+				track_recoupment.date,
+				track_recoupment.name,
+			);
+		}
+
+		for track_recoupment in track_recoupments.values() {
+			let track = self.get_track_by_main_isrc(&track_recoupment.isrc).unwrap();
+			ensure!(
+				track_recoupment.expense == track.expenses,
+				"Track recoupment expense mismatch: {}",
+				track_recoupment.name
+			);
+			ensure!(
+				track_recoupment.recoup == track.recoup,
+				"Track recoup mismatch: {}",
+				track_recoupment.name
+			);
+		}
+
+		for track in &self.tracks {
+			let track_recoupment = track_recoupments.get(&track.main_isrc);
+			let track_recoupment_expense = track_recoupment
+				.map(|r| r.expense.clone())
+				.unwrap_or(BigDecimal::from(0));
+			let track_recoupment_recoup = track_recoupment
+				.map(|r| r.recoup.clone())
+				.unwrap_or(BigDecimal::from(0));
+			ensure!(
+				track_recoupment_expense == track.expenses,
+				"Recoupment expense mismatch for {}:\n{} != {}",
+				track.title,
+				track_recoupment_expense,
+				track.expenses,
+			);
+			ensure!(
+				track_recoupment_recoup == track.recoup,
+				"Track recoup mismatch: {}",
+				track.title,
+			);
+		}
+
+		Ok(())
 	}
 	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
 		let index = *self.isrcs.get(isrc)?;
 		Some(&self.tracks[index])
 	}
+	pub fn get_track_by_main_isrc(&self, isrc: &str) -> Option<&Track> {
+		let track = self.get_track(isrc)?;
+		match track.main_isrc == isrc {
+			true => Some(track),
+			false => None,
+		}
+	}
 }
 
 pub struct AccountingPeriod {
-	name: String,
+	pub name: String,
+	pub previous_period: String,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
@@ -175,7 +298,7 @@ impl SalesReport {
 			);
 		}
 	}
-	pub fn into_track_sales_report(self, project: &Project) -> TracksSalesReport {
+	pub fn into_track_sales_report(self, project: &Project) -> TrackSalesReport {
 		let mut isrc_report_map = self.isrc_map;
 
 		for (upc, gross_royalty) in self.upc_map {
@@ -207,7 +330,7 @@ impl SalesReport {
 				(isrc, row)
 			})
 			.collect();
-		TracksSalesReport {
+		TrackSalesReport {
 			tracks: tracks_map,
 			accounting_period_name: self.accounting_period_name,
 		}
@@ -221,7 +344,7 @@ pub struct TrackSalesReportRow {
 	pub gross_royalties: BigDecimal,
 }
 #[derive(Debug)]
-pub struct TracksSalesReport {
+pub struct TrackSalesReport {
 	pub tracks: HashMap<String, TrackSalesReportRow>,
 	pub accounting_period_name: String,
 }
