@@ -18,14 +18,17 @@ fn main() -> Result<()> {
 		.nth(2)
 		.context("Usage: <settings_path> <accounting_period_name>")?;
 
-	let project = Project::load(PathBuf::from(settings_path))?;
+	let mut project = Project::load(PathBuf::from(settings_path))?;
 	project.verify()?;
 
 	let accounting_period = project
 		.get_accounting_period(&accounting_period_name)
 		.context("Accounting period from argument not found")?;
 	let accounting_result = accounting_period.generate_result(&project)?;
-	println!("{:#?}", accounting_result);
+
+	project.save_result(accounting_result)?;
+
+	// save the result
 
 	Ok(())
 }

@@ -130,6 +130,25 @@ impl Project {
 			.iter()
 			.find(|accounting_period| accounting_period.name == name)
 	}
+	pub fn save_result(&mut self, result: AccountingResult) -> Result<()> {
+		let period = self.get_accounting_period(&result.name).unwrap();
+		match self.data.accounting_period_results.last() {
+			Some(last_result) => {
+				if last_result.name != period.previous_period {
+					bail!("Last result not previous_period");
+				}
+			}
+			None => {
+				if period.previous_period != "Initial" {
+					panic!("No results exist, yet previous_period != Initial");
+				}
+			}
+		}
+		self.data.accounting_period_results.push(result);
+		self.data.verify(&self)?;
+		self.data.save(&self.data_file_path)?;
+		Ok(())
+	}
 }
 
 pub struct AccountingPeriod {

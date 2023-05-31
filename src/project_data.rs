@@ -17,6 +17,7 @@ impl ProjectData {
 		let internal_data_str = fs::read_to_string(&data_file_path)?;
 		Ok(serde_json::from_str(&internal_data_str).unwrap())
 	}
+
 	pub fn verify(&self, project: &Project) -> Result<()> {
 		let accounting_periods = &project.accounting_periods;
 		let result_periods = &self.accounting_period_results;
@@ -34,12 +35,18 @@ impl ProjectData {
 
 		Ok(())
 	}
+
+	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
+		let file_string = serde_json::to_string_pretty(self).context("Failed to serialize data")?;
+		fs::write(data_file_path, file_string).context("Failed to write data file")?;
+		Ok(())
+	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
-	name: String,
+	pub name: String,
 	tracks: HashMap<String, TrackStatement>,
 }
 
