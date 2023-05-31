@@ -47,24 +47,33 @@ impl ProjectData {
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
-	tracks: HashMap<String, TrackStatement>,
+	track_statements: TrackStatements,
+	artist_statements: HashMap<String, ArtistStatement>,
 }
 
 impl AccountingResult {
 	pub fn generate(period: &AccountingPeriod, project: &Project) -> Result<AccountingResult> {
+		let track_statements = Self::generate_track_statements(period, project)?;
+		let artist_statements = Self::generate_artist_statements(&track_statements)?;
+		Ok(AccountingResult {
+			name: period.name.clone(),
+			track_statements,
+			artist_statements,
+		})
+	}
+	fn generate_track_statements(
+		period: &AccountingPeriod,
+		project: &Project,
+	) -> Result<TrackStatements> {
 		let track_sales_report = period
 			.generate_sales_report()
 			.into_track_sales_report(&project);
 		let track_recoupments = period.map_recoupments(project)?;
 
-		let initial = AccountingResult {
-			name: "Initial".to_string(),
-			tracks: HashMap::new(),
-		};
-
-		let previous_result = match period.previous_period == "Initial" {
-			true => &initial,
-			false => project
+		let previous_result: HashMap<String, BigDecimal> = if period.previous_period == "Initial" {
+			HashMap::new()
+		} else {
+			let previous_result = project
 				.data
 				.accounting_period_results
 				.iter()
@@ -72,16 +81,18 @@ impl AccountingResult {
 				.context(format!(
 					"Could not find result from previous period \"{}\"",
 					period.previous_period
-				))?,
+				))?;
+			previous_result
+				.track_statements
+				.iter()
+				.map(|(isrc, track_statement)| {
+					(isrc.clone(), track_statement.get_costs_to_bring_forward())
+				})
+				.collect()
 		};
-		let previous_costs: HashMap<String, BigDecimal> = previous_result
-			.tracks
-			.iter()
-			.map(|(isrc, track_statement)| (isrc.clone(), track_statement.net_amount.clone()))
-			.collect();
 
 		// Add previous costs
-		let mut track_statements: HashMap<String, TrackStatement> = previous_costs
+		let mut track_statements: TrackStatements = previous_result
 			.into_iter()
 			.map(|(isrc, costs_from_previous)| {
 				let mut statement = TrackStatement::default();
@@ -121,18 +132,36 @@ impl AccountingResult {
 					.map(|split| TrackStatementSplits {
 						share: split.share.clone(),
 						name: split.name.clone(),
-						net_royalties: payable.clone() * split.share.clone(),
+						net_royalties: payable.clone() * (split.share.clone() / 100),
 					})
 					.collect(),
 			};
 		}
 
-		Ok(Self {
-			name: period.name.clone(),
-			tracks: track_statements,
-		})
+		Ok(track_statements)
+	}
+	fn generate_artist_statements(track_statements: &TrackStatements) -> Result<ArtistStatements> {
+		let mut artist_statements: ArtistStatements = HashMap::new();
+
+		for track_statement in track_statements.values() {
+			for split in &track_statement.splits {
+				artist_statements
+					.entry(split.name.clone())
+					.and_modify(|artist_statement| {
+						artist_statement.net_royalties += split.net_royalties.clone();
+					})
+					.or_insert_with(|| ArtistStatement {
+						name: split.name.clone(),
+						net_royalties: split.net_royalties.clone(),
+					});
+			}
+		}
+
+		Ok(artist_statements)
 	}
 }
+
+type TrackStatements = HashMap<String, TrackStatement>;
 
 /// ## Example
 ///
@@ -148,13 +177,20 @@ struct TrackStatement {
 	isrc: String,
 	title: String,
 	gross_royalties: BigDecimal,
-	/// future_recoupment from the previous accounting period
+	/// costs brough forward from the previous accounting period
 	costs_from_previous: BigDecimal,
 	/// new recoupable costs
 	new_costs: BigDecimal,
-	/// Actual amount recouped
+	/// Net amount after recoupment.
+	/// If negative, they will be brough forward to the next period as costs_from_previous.
+	/// If positive, they are payable royalties due to the artists.
 	net_amount: BigDecimal,
 	splits: Vec<TrackStatementSplits>,
+}
+impl TrackStatement {
+	fn get_costs_to_bring_forward(&self) -> BigDecimal {
+		self.net_amount.clone().min(BigDecimal::from(0))
+	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -164,3 +200,11 @@ pub struct TrackStatementSplits {
 	pub name: String,
 	pub net_royalties: BigDecimal,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ArtistStatement {
+	name: String,
+	net_royalties: BigDecimal,
+}
+type ArtistStatements = HashMap<String, ArtistStatement>;
