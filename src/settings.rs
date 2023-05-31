@@ -1,3 +1,4 @@
+use crate::sources::{Source, SourceKind};
 use bigdecimal::BigDecimal;
 use jsonc_parser::{parse_to_serde_value, ParseOptions};
 use serde::{Deserialize, Serialize};
@@ -5,13 +6,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::sources::{Source, SourceKind};
-
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
 	pub inernal_data_file: String,
-	pub recoupments: Vec<Recoupment>,
 	pub accounting_periods: Vec<AccountingPeriodInfo>,
 	pub tracks: Vec<Track>,
 	pub albums: Vec<Album>,
@@ -34,18 +32,10 @@ impl Settings {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Recoupment {
-	pub isrc: String,
-	pub date: String,
-	pub expense: BigDecimal,
-	pub recoup: BigDecimal,
-	pub name: String,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct AccountingPeriodInfo {
 	pub name: String,
 	pub previous_period: String,
+	pub recoupments: Vec<Recoupment>,
 	#[serde(flatten)]
 	pub sources_by_platform: HashMap<String, Vec<String>>,
 }
@@ -76,6 +66,15 @@ impl AccountingPeriodInfo {
 			.flatten()
 			.collect()
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Recoupment {
+	pub isrc: String,
+	pub date: String,
+	pub expense: BigDecimal,
+	pub recoup: BigDecimal,
+	pub name: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

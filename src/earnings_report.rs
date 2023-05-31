@@ -1,18 +1,19 @@
+use crate::project_data::{AccountingResult, ProjectData};
 use crate::settings::{Album, Recoupment, Settings, Track};
 use crate::sources::Source;
+use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Result};
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::BigDecimal;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::env;
 use std::path::{Path, PathBuf};
 
 pub struct Project {
 	pub data_file_path: PathBuf,
 	pub accounting_periods: Vec<AccountingPeriod>,
-	pub recoupments: Vec<Recoupment>,
+	pub data: ProjectData,
 	/// We use a vec because multiple ISRCs can point to the same Track
 	tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
@@ -29,6 +30,7 @@ impl Project {
 					name: accounting_period.name,
 					previous_period: accounting_period.previous_period,
 					sources,
+					recoupments: accounting_period.recoupments,
 				}
 			})
 			.collect();
@@ -63,23 +65,17 @@ impl Project {
 			album_map
 		};
 		let data_file_path = dir.join(settings.inernal_data_file);
-		if !Path::exists(&data_file_path) {
-			panic!("Internal data file not found: {:?}", data_file_path);
-		}
+		let data = ProjectData::open(&data_file_path).unwrap();
 		Project {
 			data_file_path,
-			recoupments: settings.recoupments,
 			accounting_periods,
+			data,
 			tracks: settings.tracks,
 			isrcs,
 			albums,
 		}
 	}
-	pub fn load() -> Result<Self> {
-		let settings_path = match env::args().nth(1) {
-			Some(arg) => PathBuf::from(arg),
-			None => bail!("No Sources.toml argument given"),
-		};
+	pub fn load(settings_path: PathBuf) -> Result<Self> {
 		let project_dir = settings_path.parent().unwrap().to_owned();
 		let settings = Settings::from_path(settings_path);
 		Ok(Self::new(project_dir, settings))
@@ -89,7 +85,7 @@ impl Project {
 			bail!("Internal data file not found: {:?}", self.data_file_path);
 		}
 		self.verify_accounting_periods()?;
-		self.verify_recoupments()?;
+		self.data.verify(self)?;
 		Ok(())
 	}
 	fn verify_accounting_periods(&self) -> Result<()> {
@@ -115,10 +111,62 @@ impl Project {
 		}
 		Ok(())
 	}
-	fn verify_recoupments(&self) -> Result<()> {
+	pub fn get_track_by_any_isrc(&self, isrc: &str) -> Option<&Track> {
+		let index = *self.isrcs.get(isrc)?;
+		Some(&self.tracks[index])
+	}
+	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
+		let track = self.get_track_by_any_isrc(isrc)?;
+		match track.main_isrc == isrc {
+			true => Some(track),
+			false => None,
+		}
+	}
+	pub fn get_album(&self, upc: &u64) -> Option<&Album> {
+		self.albums.get(upc)
+	}
+	pub fn get_accounting_period(&self, name: &str) -> Option<&AccountingPeriod> {
+		self.accounting_periods
+			.iter()
+			.find(|accounting_period| accounting_period.name == name)
+	}
+}
+
+pub struct AccountingPeriod {
+	pub name: String,
+	pub previous_period: String,
+	pub recoupments: Vec<Recoupment>,
+	sources: Vec<Source>,
+}
+impl AccountingPeriod {
+	fn generate_sales_report_csv_str(&self) -> String {
+		let files: Vec<_> = self
+			.sources
+			.par_iter()
+			.map(|source| {
+				into_sales_report(source.process_source())
+					.collect_into_rows()
+					.unwrap()
+			})
+			.collect();
+		let pipelines = files.into_iter().map(|rows| {
+			return Pipeline::from_rows(rows).unwrap();
+		});
+		Pipeline::from_pipelines(pipelines)
+			.collect_into_string()
+			.unwrap()
+	}
+	pub fn generate_sales_report(&self) -> SalesReport {
+		let sales_report_csv = self.generate_sales_report_csv_str();
+		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
+	}
+	pub fn generate_result(&self, project: &Project) -> Result<AccountingResult> {
+		AccountingResult::generate(self, project)
+	}
+	pub fn map_recoupments(&self, project: &Project) -> Result<HashMap<String, Recoupment>> {
 		let mut track_recoupments = HashMap::new();
 		for recoupment in &self.recoupments {
-			let track = match self.get_track_by_main_isrc(&recoupment.isrc) {
+			let track = match project.get_track(&recoupment.isrc) {
 				Some(track) => track,
 				None => bail!("Recoupment has a non-existent ISRC {}", recoupment.isrc),
 			};
@@ -152,84 +200,7 @@ impl Project {
 				track_recoupment.name,
 			);
 		}
-
-		for track_recoupment in track_recoupments.values() {
-			let track = self.get_track_by_main_isrc(&track_recoupment.isrc).unwrap();
-			ensure!(
-				track_recoupment.expense == track.expenses,
-				"Track recoupment expense mismatch: {}",
-				track_recoupment.name
-			);
-			ensure!(
-				track_recoupment.recoup == track.recoup,
-				"Track recoup mismatch: {}",
-				track_recoupment.name
-			);
-		}
-
-		for track in &self.tracks {
-			let track_recoupment = track_recoupments.get(&track.main_isrc);
-			let track_recoupment_expense = track_recoupment
-				.map(|r| r.expense.clone())
-				.unwrap_or(BigDecimal::from(0));
-			let track_recoupment_recoup = track_recoupment
-				.map(|r| r.recoup.clone())
-				.unwrap_or(BigDecimal::from(0));
-			ensure!(
-				track_recoupment_expense == track.expenses,
-				"Recoupment expense mismatch for {}:\n{} != {}",
-				track.title,
-				track_recoupment_expense,
-				track.expenses,
-			);
-			ensure!(
-				track_recoupment_recoup == track.recoup,
-				"Track recoup mismatch: {}",
-				track.title,
-			);
-		}
-
-		Ok(())
-	}
-	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
-		let index = *self.isrcs.get(isrc)?;
-		Some(&self.tracks[index])
-	}
-	pub fn get_track_by_main_isrc(&self, isrc: &str) -> Option<&Track> {
-		let track = self.get_track(isrc)?;
-		match track.main_isrc == isrc {
-			true => Some(track),
-			false => None,
-		}
-	}
-}
-
-pub struct AccountingPeriod {
-	pub name: String,
-	pub previous_period: String,
-	sources: Vec<Source>,
-}
-impl AccountingPeriod {
-	fn generate_sales_report_csv_str(&self) -> String {
-		let files: Vec<_> = self
-			.sources
-			.par_iter()
-			.map(|source| {
-				into_sales_report(source.process_source())
-					.collect_into_rows()
-					.unwrap()
-			})
-			.collect();
-		let pipelines = files.into_iter().map(|rows| {
-			return Pipeline::from_rows(rows).unwrap();
-		});
-		Pipeline::from_pipelines(pipelines)
-			.collect_into_string()
-			.unwrap()
-	}
-	pub fn generate_sales_report(&self) -> SalesReport {
-		let sales_report_csv = self.generate_sales_report_csv_str();
-		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
+		Ok(track_recoupments)
 	}
 }
 
@@ -254,9 +225,9 @@ struct SalesReportRecord {
 }
 
 pub struct SalesReport {
-	isrc_map: HashMap<String, BigDecimal>,
-	upc_map: HashMap<u64, BigDecimal>,
-	accounting_period_name: String,
+	pub isrc_map: HashMap<String, BigDecimal>,
+	pub upc_map: HashMap<u64, BigDecimal>,
+	pub accounting_period_name: String,
 }
 impl SalesReport {
 	fn from_csv_str(sales_report_csv: String, accounting_period_name: String) -> Self {
@@ -299,52 +270,6 @@ impl SalesReport {
 		}
 	}
 	pub fn into_track_sales_report(self, project: &Project) -> TrackSalesReport {
-		let mut isrc_report_map = self.isrc_map;
-
-		for (upc, gross_royalty) in self.upc_map {
-			let album = match project.albums.get(&upc) {
-				Some(album) => album,
-				None => {
-					println!("No album with UPC {}", upc);
-					continue;
-				}
-			};
-			let album_len = BigDecimal::from_usize(album.isrcs.len()).unwrap();
-			let sales_revenue_per_track = gross_royalty / album_len;
-			for isrc in album.isrcs.clone() {
-				*isrc_report_map.entry(isrc).or_default() += sales_revenue_per_track.clone()
-			}
-		}
-		let tracks_map = isrc_report_map
-			.into_iter()
-			.map(|(isrc, gross_royalties)| {
-				let track = match project.get_track(&isrc) {
-					Some(val) => val,
-					None => panic!("No track with ISRC {}", isrc),
-				};
-				let row = TrackSalesReportRow {
-					isrc: isrc.clone(),
-					title: track.title.clone(),
-					gross_royalties,
-				};
-				(isrc, row)
-			})
-			.collect();
-		TrackSalesReport {
-			tracks: tracks_map,
-			accounting_period_name: self.accounting_period_name,
-		}
+		TrackSalesReport::from_sales_report(self, project)
 	}
-}
-
-#[derive(Debug)]
-pub struct TrackSalesReportRow {
-	pub isrc: String,
-	pub title: String,
-	pub gross_royalties: BigDecimal,
-}
-#[derive(Debug)]
-pub struct TrackSalesReport {
-	pub tracks: HashMap<String, TrackSalesReportRow>,
-	pub accounting_period_name: String,
 }
