@@ -74,53 +74,58 @@ impl AccountingResult {
 					period.previous_period
 				))?,
 		};
-
-		let track_statements = track_sales_report
+		let previous_costs: HashMap<String, BigDecimal> = previous_result
 			.tracks
+			.iter()
+			.map(|(isrc, track_statement)| (isrc.clone(), track_statement.net_amount.clone()))
+			.collect();
+
+		// Add previous costs
+		let mut track_statements: HashMap<String, TrackStatement> = previous_costs
 			.into_iter()
-			.map(|(isrc, sales_info)| {
-				let previous_statement = previous_result.tracks.get(&sales_info.isrc);
-				let track = project.get_track(&sales_info.isrc).unwrap();
-				let recoupment = track_recoupments.get(&sales_info.isrc);
-
-				let gross_royalties = sales_info.gross_royalties;
-				let costs_from_previous = previous_statement
-					.map(|previous_statement| {
-						previous_statement
-							.net_amount
-							.clone()
-							.max(BigDecimal::from(0))
-					})
-					.unwrap_or(BigDecimal::from(0));
-
-				let new_costs = recoupment
-					.map(|recoupment| recoupment.recoup.clone())
-					.unwrap_or(BigDecimal::from(0));
-
-				let total_costs = costs_from_previous.clone() - new_costs.clone();
-				let net_amount = gross_royalties.clone() - total_costs;
-				let payable = net_amount.clone().max(BigDecimal::from(0));
-
-				let track_data = TrackStatement {
-					isrc: sales_info.isrc,
-					title: sales_info.title,
-					gross_royalties,
-					costs_from_previous,
-					new_costs,
-					net_amount: net_amount.clone(),
-					splits: track
-						.splits
-						.iter()
-						.map(|split| TrackStatementSplits {
-							share: split.share.clone(),
-							name: split.name.clone(),
-							net_royalties: payable.clone() * split.share.clone(),
-						})
-						.collect(),
-				};
-				return (isrc, track_data);
+			.map(|(isrc, costs_from_previous)| {
+				let mut statement = TrackStatement::default();
+				statement.costs_from_previous = costs_from_previous;
+				(isrc, statement)
 			})
 			.collect();
+
+		// Add new costs
+		for track_recoupment in track_recoupments.into_values() {
+			let statement = track_statements.entry(track_recoupment.isrc).or_default();
+			statement.new_costs = track_recoupment.recoup;
+		}
+
+		// Add track statements for everything in the sales report
+		for (isrc, sales_info) in track_sales_report.tracks {
+			let statement = track_statements.entry(isrc).or_default();
+			let track = project.get_track(&sales_info.isrc).unwrap();
+
+			let gross_royalties = sales_info.gross_royalties;
+			let costs_from_previous = statement.costs_from_previous.clone();
+			let new_costs = statement.new_costs.clone();
+			let total_costs = costs_from_previous.clone() - new_costs.clone();
+			let net_amount = gross_royalties.clone() - total_costs;
+			let payable = net_amount.clone().max(BigDecimal::from(0));
+
+			*statement = TrackStatement {
+				isrc: sales_info.isrc,
+				title: sales_info.title,
+				gross_royalties,
+				costs_from_previous,
+				new_costs,
+				net_amount,
+				splits: track
+					.splits
+					.iter()
+					.map(|split| TrackStatementSplits {
+						share: split.share.clone(),
+						name: split.name.clone(),
+						net_royalties: payable.clone() * split.share.clone(),
+					})
+					.collect(),
+			};
+		}
 
 		Ok(Self {
 			name: period.name.clone(),
@@ -137,7 +142,7 @@ impl AccountingResult {
 /// | b/f costs       |     0 |  -250 |  -200 |     0 |     0 |
 /// | new costs       |  -300 |     0 |     0 |     0 |  -200 |
 /// | net_sales       |  -250 |  -200 |    50 |   200 |   -50 |
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TrackStatement {
 	isrc: String,
