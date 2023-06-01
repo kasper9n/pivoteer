@@ -88,7 +88,7 @@ pub struct Payout {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Album {
-	pub upc: u64,
+	pub upc: String,
 	pub title: String,
 	pub isrcs: Vec<String>,
 }
@@ -99,7 +99,7 @@ pub struct Track {
 	#[serde(rename = "isrc")]
 	pub main_isrc: String,
 	pub secondary_isrcs: Option<Vec<String>>,
-	pub single_upc: Option<u64>,
+	pub single_upc: Option<String>,
 	pub title: String,
 	pub max_recoup: BigDecimal,
 	pub expenses: BigDecimal,

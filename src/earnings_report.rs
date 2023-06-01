@@ -17,7 +17,7 @@ pub struct Project {
 	/// We use a vec because multiple ISRCs can point to the same Track
 	tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
-	albums: HashMap<u64, Album>,
+	albums: HashMap<String, Album>,
 }
 impl Project {
 	fn new(dir: PathBuf, settings: Settings) -> Self {
@@ -138,7 +138,7 @@ impl Project {
 			false => None,
 		}
 	}
-	pub fn get_album(&self, upc: &u64) -> Option<&Album> {
+	pub fn get_album(&self, upc: &str) -> Option<&Album> {
 		self.albums.get(upc)
 	}
 	pub fn get_accounting_period(&self, name: &str) -> Option<&AccountingPeriod> {
@@ -261,7 +261,7 @@ struct SalesReportRecord {
 
 pub struct SalesReport {
 	pub isrc_map: HashMap<String, BigDecimal>,
-	pub upc_map: HashMap<u64, BigDecimal>,
+	pub upc_map: HashMap<String, BigDecimal>,
 	pub accounting_period_name: String,
 }
 impl SalesReport {
@@ -288,13 +288,9 @@ impl SalesReport {
 				.or_insert(record.gross_royalties.clone());
 			*entry += record.gross_royalties;
 		} else if record.upc != "" {
-			let upc = record
-				.upc
-				.parse::<u64>()
-				.expect(&format!("Invalid UPC {}", record.upc));
 			let entry = self
 				.upc_map
-				.entry(upc)
+				.entry(record.upc)
 				.or_insert(record.gross_royalties.clone());
 			*entry += record.gross_royalties;
 		} else {
