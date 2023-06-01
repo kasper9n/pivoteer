@@ -85,7 +85,23 @@ impl Project {
 			bail!("Internal data file not found: {:?}", self.data_file_path);
 		}
 		self.verify_accounting_periods()?;
+		self.verify_tracks()?;
 		self.data.verify(self)?;
+		Ok(())
+	}
+	fn verify_tracks(&self) -> Result<()> {
+		for track in &self.tracks {
+			let summed_artist_shares = track
+				.splits
+				.iter()
+				.map(|split| split.share.clone())
+				.reduce(|acc, share| acc + share)
+				.unwrap_or(BigDecimal::from(0));
+			let summed_shares = track.label_share.clone() + summed_artist_shares;
+			if summed_shares != BigDecimal::from(100) {
+				bail!("Track {} splits don't add up", track.title);
+			}
+		}
 		Ok(())
 	}
 	fn verify_accounting_periods(&self) -> Result<()> {

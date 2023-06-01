@@ -28,7 +28,5 @@ fn main() -> Result<()> {
 
 	project.save_result(accounting_result)?;
 
-	// save the result
-
 	Ok(())
 }
