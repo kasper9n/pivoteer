@@ -36,6 +36,7 @@ pub struct AccountingPeriodInfo {
 	pub name: String,
 	pub previous_period: String,
 	pub recoupments: Vec<Recoupment>,
+	payouts: Vec<Payout>,
 	#[serde(flatten)]
 	pub sources_by_platform: HashMap<String, Vec<String>>,
 }
@@ -74,6 +75,13 @@ pub struct Recoupment {
 	pub date: String,
 	pub expense: BigDecimal,
 	pub recoup: BigDecimal,
+	pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Payout {
+	pub date: String,
+	pub amount: BigDecimal,
 	pub name: String,
 }
 
