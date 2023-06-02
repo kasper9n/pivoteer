@@ -34,36 +34,43 @@ impl Project {
 				}
 			})
 			.collect();
-		let isrcs = {
-			let mut isrc_map = HashMap::new();
-			for (i, track) in settings.tracks.iter().enumerate() {
-				for isrc in track.isrcs() {
-					let old_vaue = isrc_map.insert(isrc.clone(), i);
-					if old_vaue.is_some() {
-						panic!("Duplicate ISRC found: {}", isrc);
-					}
+		let mut album_map = HashMap::new();
+		let mut track_map = HashMap::new();
+		for (i, track) in settings.tracks.iter().enumerate() {
+			for isrc in track.isrcs() {
+				let replaced_track = track_map.insert(isrc.clone(), i);
+				if replaced_track.is_some() {
+					panic!("Duplicate ISRC found: {}", isrc);
 				}
 			}
-			isrc_map
-		};
-		let albums = {
-			let mut album_map = HashMap::new();
-			for album in settings.albums {
-				if album.isrcs.is_empty() {
-					panic!("Empty album {}", album.upc);
-				}
-				let old_vaue = album_map.insert(album.upc.clone(), album.clone());
-				if old_vaue.is_some() {
-					panic!("Duplicate UPC found: {}", album.upc);
-				}
-				for isrc in album.isrcs {
-					if !isrcs.contains_key(&isrc) {
-						panic!("Album {} contains non-existant ISRC {}", album.upc, isrc);
-					}
+			for single_upc in &track.single_upcs {
+				let replaced_album = album_map.insert(
+					single_upc.clone(),
+					Album {
+						isrcs: vec![track.main_isrc.clone()],
+						upc: single_upc.clone(),
+						title: track.title.clone(),
+					},
+				);
+				if replaced_album.is_some() {
+					panic!("Duplicate UPC found: {}", single_upc);
 				}
 			}
-			album_map
-		};
+		}
+		for album in settings.albums {
+			if album.isrcs.is_empty() {
+				panic!("Empty album {}", album.upc);
+			}
+			let replaced_album = album_map.insert(album.upc.clone(), album.clone());
+			if replaced_album.is_some() {
+				panic!("Duplicate UPC found: {}", album.upc);
+			}
+			for isrc in album.isrcs {
+				if !track_map.contains_key(&isrc) {
+					panic!("Album {} contains non-existant ISRC {}", album.upc, isrc);
+				}
+			}
+		}
 		let data_file_path = dir.join(settings.inernal_data_file);
 		let data = ProjectData::open(&data_file_path).unwrap();
 		Project {
@@ -71,8 +78,8 @@ impl Project {
 			accounting_periods,
 			data,
 			tracks: settings.tracks,
-			isrcs,
-			albums,
+			isrcs: track_map,
+			albums: album_map,
 		}
 	}
 	pub fn load(settings_path: PathBuf) -> Result<Self> {

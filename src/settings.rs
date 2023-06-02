@@ -99,7 +99,7 @@ pub struct Track {
 	#[serde(rename = "isrc")]
 	pub main_isrc: String,
 	pub secondary_isrcs: Option<Vec<String>>,
-	pub single_upc: Option<String>,
+	pub single_upcs: Vec<String>,
 	pub title: String,
 	pub max_recoup: BigDecimal,
 	pub expenses: BigDecimal,

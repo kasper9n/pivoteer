@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
+use clap::Parser;
 use earnings_report::Project;
-use std::env;
 use std::path::PathBuf;
 
 mod earnings_report;
@@ -10,23 +10,34 @@ mod sources;
 mod track_sales_report;
 mod transformers;
 
-fn main() -> Result<()> {
-	let settings_path = env::args()
-		.nth(1)
-		.context("Usage: <settings_path> <accounting_period_name>")?;
-	let accounting_period_name = env::args()
-		.nth(2)
-		.context("Usage: <settings_path> <accounting_period_name>")?;
+#[derive(Parser)]
+#[command(about, long_about = None)]
+struct Args {
+	/// Path to .jsonc settings file
+	settings_path: PathBuf,
 
-	let mut project = Project::load(PathBuf::from(settings_path))?;
+	/// Accounting period to generate results for
+	accounting_period_name: String,
+
+	// Save accounting period results
+	#[arg(long)]
+	save: bool,
+}
+
+fn main() -> Result<()> {
+	let args = Args::parse();
+
+	let mut project = Project::load(PathBuf::from(args.settings_path))?;
 	project.verify()?;
 
 	let accounting_period = project
-		.get_accounting_period(&accounting_period_name)
+		.get_accounting_period(&args.accounting_period_name)
 		.context("Accounting period from argument not found")?;
 	let accounting_result = accounting_period.generate_result(&project)?;
 
-	project.save_result(accounting_result)?;
+	if args.save {
+		project.save_result(accounting_result)?;
+	}
 
 	Ok(())
 }
