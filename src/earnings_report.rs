@@ -3,12 +3,13 @@ use crate::settings::{Album, Recoupment, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 pub struct Project {
 	pub data_file_path: PathBuf,
@@ -256,16 +257,18 @@ pub fn into_sales_report(pipeline: Pipeline) -> Pipeline {
 	})
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct SalesReportRecord {
+	// String because deserializing to BigDecimal seems to lose precision
 	#[serde(rename = "Gross Royalties")]
-	gross_royalties: BigDecimal,
+	gross_royalties: String,
 	#[serde(rename = "ISRC")]
 	isrc: String,
 	#[serde(rename = "UPC")]
 	upc: String,
 }
 
+#[derive(Debug)]
 pub struct SalesReport {
 	pub isrc_map: HashMap<String, BigDecimal>,
 	pub upc_map: HashMap<String, BigDecimal>,
@@ -292,14 +295,14 @@ impl SalesReport {
 			let entry = self
 				.isrc_map
 				.entry(record.isrc)
-				.or_insert(record.gross_royalties.clone());
-			*entry += record.gross_royalties;
+				.or_insert(BigDecimal::from(0));
+			*entry += BigDecimal::from_str(&record.gross_royalties).unwrap();
 		} else if record.upc != "" {
 			let entry = self
 				.upc_map
 				.entry(record.upc)
-				.or_insert(record.gross_royalties.clone());
-			*entry += record.gross_royalties;
+				.or_insert(BigDecimal::from(0));
+			*entry += BigDecimal::from_str(&record.gross_royalties).unwrap();
 		} else {
 			println!(
 				"Missing UPC & ISRC in row with gross royalties of {}",
