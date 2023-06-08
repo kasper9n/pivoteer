@@ -1,6 +1,6 @@
 use crate::earnings_report::{AccountingPeriod, Project};
 use anyhow::{ensure, Context, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -172,21 +172,57 @@ impl AccountingResult {
 
 		for track_statement in track_statements.values() {
 			for split in &track_statement.splits {
-				artist_statements
-					.entry(split.name.clone())
-					.and_modify(|artist_statement| {
-						artist_statement.net_royalties +=
-							split.net_royalties.clone().max(BigDecimal::from(0));
-					})
-					.or_insert_with(|| ArtistStatement {
-						name: split.name.clone(),
-						net_royalties: split.net_royalties.clone(),
-					});
+				let artist_statement =
+					artist_statements
+						.entry(split.name.clone())
+						.or_insert_with(|| ArtistStatement {
+							name: split.name.clone(),
+							net_royalties: BigDecimal::zero(),
+						});
+				artist_statement.net_royalties +=
+					split.net_royalties.clone().max(BigDecimal::zero());
 			}
 		}
 
 		Ok(artist_statements)
 	}
+}
+
+#[test]
+fn test_generate_artist_statements() {
+	let track_statements = vec![
+		TrackStatement {
+			isrc: "A".to_string(),
+			title: "Salvatore Ganacci - Fight Dirty".to_string(),
+			splits: vec![TrackStatementSplits {
+				share: BigDecimal::from(100),
+				name: "Salvatore Ganacci".to_string(),
+				net_royalties: BigDecimal::from(10),
+			}],
+			..Default::default()
+		},
+		TrackStatement {
+			isrc: "B".to_string(),
+			title: "Salvatore Ganacci - Take Me To America".to_string(),
+			splits: vec![TrackStatementSplits {
+				share: BigDecimal::from(100),
+				name: "Salvatore Ganacci".to_string(),
+				net_royalties: BigDecimal::from(-3),
+			}],
+			..Default::default()
+		},
+	];
+	let track_statements = track_statements
+		.into_iter()
+		.map(|track_statement| (track_statement.isrc.clone(), track_statement))
+		.collect::<HashMap<_, _>>();
+	let artist_statements =
+		AccountingResult::generate_artist_statements(&track_statements).unwrap();
+	assert_eq!(artist_statements.len(), 1);
+	assert_eq!(
+		artist_statements["Salvatore Ganacci"].net_royalties,
+		BigDecimal::from(10)
+	);
 }
 
 type TrackStatements = HashMap<String, TrackStatement>;
