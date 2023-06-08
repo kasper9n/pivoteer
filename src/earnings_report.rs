@@ -3,7 +3,7 @@ use crate::settings::{Album, Recoupment, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Result};
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::BigDecimal;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;

@@ -32,21 +32,19 @@ impl TrackSalesReport {
 				*isrc_report_map.entry(isrc).or_default() += sales_revenue_per_track.clone()
 			}
 		}
-		let tracks_map = isrc_report_map
-			.into_iter()
-			.map(|(isrc, gross_royalties)| {
-				let track = match project.get_track_by_any_isrc(&isrc) {
-					Some(val) => val,
-					None => panic!("No track with ISRC {}", isrc),
-				};
-				let row = TrackSalesReportRow {
-					isrc: track.main_isrc.clone(),
-					title: track.title.clone(),
-					gross_royalties,
-				};
-				(isrc, row)
-			})
-			.collect();
+		let mut tracks_map = HashMap::new();
+		for (unmapped_isrc, gross_royalties) in isrc_report_map.clone() {
+			let track = match project.get_track_by_any_isrc(&unmapped_isrc) {
+				Some(val) => val,
+				None => panic!("No track with ISRC {}", unmapped_isrc),
+			};
+			let row = TrackSalesReportRow {
+				isrc: track.main_isrc.clone(),
+				title: track.title.clone(),
+				gross_royalties,
+			};
+			tracks_map.insert(track.main_isrc.clone(), row);
+		}
 		TrackSalesReport {
 			tracks: tracks_map,
 			accounting_period_name: sales_report.accounting_period_name,

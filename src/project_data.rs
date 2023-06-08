@@ -1,8 +1,8 @@
 use crate::earnings_report::{AccountingPeriod, Project};
 use anyhow::{ensure, Context, Result};
 use bigdecimal::BigDecimal;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 
@@ -43,11 +43,23 @@ impl ProjectData {
 	}
 }
 
+// https://stackoverflow.com/a/74971717/6553404
+pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
+	value: &HashMap<K, V>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	let mut items: Vec<(_, _)> = value.iter().collect();
+	items.sort_by(|a, b| a.0.cmp(&b.0));
+	BTreeMap::from_iter(items).serialize(serializer)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
+	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatements,
+	#[serde(serialize_with = "sorted_map")]
 	artist_statements: HashMap<String, ArtistStatement>,
 }
 
@@ -92,27 +104,30 @@ impl AccountingResult {
 		};
 
 		// Add previous costs
-		let mut opening_net_amounts: TrackStatements = previous_net_amounts
+		let mut statements: TrackStatements = previous_net_amounts
 			.into_iter()
 			.map(|(isrc, previous_net_amounts)| {
 				let mut statement = TrackStatement::default();
 				statement.opening_net_amount = previous_net_amounts;
+				statement.isrc = isrc.clone();
 				(isrc, statement)
 			})
 			.collect();
 
 		// Add new costs
 		for track_recoupment in track_recoupments.into_values() {
-			let statement = opening_net_amounts
-				.entry(track_recoupment.isrc)
-				.or_default();
+			let statement = statements
+				.entry(track_recoupment.isrc.clone())
+				.or_insert_with(|| TrackStatement {
+					isrc: track_recoupment.isrc,
+					..Default::default()
+				});
 			statement.new_costs = track_recoupment.recoup;
 		}
 
 		// Add track statements for everything in the sales report
 		for (isrc, sales_info) in track_sales_report.tracks {
-			let statement = opening_net_amounts.entry(isrc).or_default();
-			let track = project.get_track(&sales_info.isrc).unwrap();
+			let statement = statements.entry(isrc).or_default();
 
 			let opening_net_amount = statement.opening_net_amount.clone();
 			let gross_royalties = sales_info.gross_royalties;
@@ -121,25 +136,36 @@ impl AccountingResult {
 				opening_net_amount.clone() + gross_royalties.clone() - new_costs.clone();
 
 			*statement = TrackStatement {
-				isrc: sales_info.isrc,
-				title: sales_info.title,
+				isrc: "".to_string(),
+				title: "".to_string(),
 				opening_net_amount,
 				gross_royalties,
 				new_costs,
 				net_amount: net_amount.clone(),
-				splits: track
-					.splits
-					.iter()
-					.map(|split| TrackStatementSplits {
-						share: split.share.clone(),
-						name: split.name.clone(),
-						net_royalties: net_amount.clone() * (split.share.clone() / 100),
-					})
-					.collect(),
+				splits: vec![],
 			};
 		}
 
-		Ok(opening_net_amounts)
+		// Fill in remaining fields for all elements
+		for (isrc, statement) in &mut statements {
+			let track = project.get_track(&isrc).unwrap();
+			statement.isrc = track.main_isrc.clone();
+			statement.title = track.title.clone();
+			statement.splits = track
+				.splits
+				.iter()
+				.map(|split| TrackStatementSplits {
+					share: split.share.clone(),
+					name: split.name.clone(),
+					net_royalties: statement.net_amount.clone() * (split.share.clone() / 100),
+				})
+				.collect();
+
+			ensure!(isrc != "");
+			ensure!(isrc == statement.isrc.as_str());
+		}
+
+		Ok(statements)
 	}
 	fn generate_artist_statements(track_statements: &TrackStatements) -> Result<ArtistStatements> {
 		let mut artist_statements: ArtistStatements = HashMap::new();
