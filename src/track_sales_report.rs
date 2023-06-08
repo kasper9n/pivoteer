@@ -27,7 +27,8 @@ impl TrackSalesReport {
 				}
 			};
 			let album_len = BigDecimal::from_usize(album.isrcs.len()).unwrap();
-			let sales_revenue_per_track = gross_royalty / album_len;
+			let factor = (BigDecimal::from(1) / album_len).round(8);
+			let sales_revenue_per_track: BigDecimal = gross_royalty * factor;
 			for isrc in album.isrcs.clone() {
 				*isrc_report_map.entry(isrc).or_default() += sales_revenue_per_track.clone()
 			}
