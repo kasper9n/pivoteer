@@ -37,8 +37,12 @@ impl ProjectData {
 	}
 
 	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
-		let file_string = serde_json::to_string_pretty(self).context("Failed to serialize data")?;
-		fs::write(data_file_path, file_string).context("Failed to write data file")?;
+		let mut buf = Vec::new();
+		let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
+		let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+		self.serialize(&mut ser)
+			.context("Failed to serialize data")?;
+		fs::write(data_file_path, buf).context("Failed to write data file")?;
 		Ok(())
 	}
 }
