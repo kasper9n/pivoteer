@@ -3,6 +3,7 @@ use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 use serde::{Deserialize, Serialize, Serializer};
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
@@ -194,6 +195,20 @@ impl AccountingResult {
 					.clone()
 					.max(BigDecimal::zero());
 				artist_statement.tracks.push(artist_track_statement);
+				// sort tracks for determinism
+				artist_statement.tracks.sort_unstable_by(|a, b| {
+					// net royalties (descending)
+					match b.net_royalties.cmp(&a.net_royalties) {
+						// fallback to isrcs (ascending)
+						Ordering::Equal => match a.isrc.cmp(&b.isrc) {
+							Ordering::Equal => {
+								panic!("Duplicate ISRCs in artist statement")
+							}
+							order => order,
+						},
+						order => order,
+					}
+				})
 			}
 		}
 
