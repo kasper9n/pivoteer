@@ -182,7 +182,6 @@ impl AccountingResult {
 					artist_statements
 						.entry(split.name.clone())
 						.or_insert_with(|| ArtistStatement {
-							name: split.name.clone(),
 							net_royalties: BigDecimal::zero(),
 							tracks: vec![],
 						});
@@ -289,7 +288,6 @@ struct TrackStatement {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ArtistStatement {
-	name: String,
 	net_royalties: BigDecimal,
 	tracks: Vec<ArtistTrackStatement>,
 }
