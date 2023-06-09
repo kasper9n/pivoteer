@@ -314,3 +314,57 @@ impl SalesReport {
 		TrackSalesReport::from_sales_report(self, project)
 	}
 }
+
+#[cfg(test)]
+pub mod test {
+	use crate::earnings_report::Project;
+	use crate::project_data::ProjectData;
+	use crate::settings::{Split, Track};
+	use bigdecimal::{BigDecimal, Zero};
+	use maplit::hashmap;
+	use std::path::PathBuf;
+	pub fn create_mock_project() -> Project {
+		Project {
+			data_file_path: PathBuf::new(),
+			accounting_periods: vec![],
+			data: ProjectData {
+				accounting_period_results: vec![],
+			},
+			tracks: vec![
+				Track {
+					main_isrc: "A".to_string(),
+					title: "Salvatore Ganacci - Fight Dirty".to_string(),
+					secondary_isrcs: None,
+					single_upcs: vec![],
+					max_recoup: BigDecimal::zero(),
+					expenses: BigDecimal::zero(),
+					recoup: BigDecimal::zero(),
+					label_share: BigDecimal::zero(),
+					splits: vec![Split {
+						name: "Salvatore Ganacci".to_string(),
+						share: BigDecimal::from(50),
+					}],
+				},
+				Track {
+					main_isrc: "B".to_string(),
+					title: "Salvatore Ganacci - Take Me To America".to_string(),
+					secondary_isrcs: None,
+					single_upcs: vec![],
+					max_recoup: BigDecimal::zero(),
+					expenses: BigDecimal::zero(),
+					recoup: BigDecimal::zero(),
+					label_share: BigDecimal::zero(),
+					splits: vec![Split {
+						name: "Salvatore Ganacci".to_string(),
+						share: BigDecimal::from(50),
+					}],
+				},
+			],
+			isrcs: hashmap! {
+				"A".to_string() => 0,
+				"B".to_string() => 1,
+			},
+			albums: hashmap! {},
+		}
+	}
+}

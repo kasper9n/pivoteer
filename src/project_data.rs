@@ -1,10 +1,16 @@
 use crate::earnings_report::{AccountingPeriod, Project};
+use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
+
+fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
+	share * BigDecimal::from_str("0.01").unwrap()
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -62,15 +68,18 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 pub struct AccountingResult {
 	pub name: String,
 	#[serde(serialize_with = "sorted_map")]
-	track_statements: TrackStatements,
+	track_statements: TrackStatementsMap,
 	#[serde(serialize_with = "sorted_map")]
 	artist_statements: HashMap<String, ArtistStatement>,
 }
 
 impl AccountingResult {
 	pub fn generate(period: &AccountingPeriod, project: &Project) -> Result<AccountingResult> {
-		let track_statements = Self::generate_track_statements(period, project)?;
-		let artist_statements = Self::generate_artist_statements(&track_statements)?;
+		let sales_report = period.generate_sales_report();
+		let track_sales_report = sales_report.into_track_sales_report(&project);
+		let track_statements =
+			Self::generate_track_statements(track_sales_report, period, project)?;
+		let artist_statements = Self::generate_artist_statements(&track_statements, &project)?;
 		Ok(AccountingResult {
 			name: period.name.clone(),
 			track_statements,
@@ -78,12 +87,10 @@ impl AccountingResult {
 		})
 	}
 	fn generate_track_statements(
+		track_sales_report: TrackSalesReport,
 		period: &AccountingPeriod,
 		project: &Project,
-	) -> Result<TrackStatements> {
-		let track_sales_report = period
-			.generate_sales_report()
-			.into_track_sales_report(&project);
+	) -> Result<TrackStatementsMap> {
 		let track_recoupments = period.map_recoupments(project)?;
 
 		let previous_net_amounts: HashMap<String, BigDecimal> = if period.previous_period
@@ -108,7 +115,7 @@ impl AccountingResult {
 		};
 
 		// Add previous costs
-		let mut statements: TrackStatements = previous_net_amounts
+		let mut statements: TrackStatementsMap = previous_net_amounts
 			.into_iter()
 			.map(|(isrc, previous_net_amounts)| {
 				let mut statement = TrackStatement::default();
@@ -146,7 +153,6 @@ impl AccountingResult {
 				gross_royalties,
 				new_costs,
 				net_amount: net_amount.clone(),
-				splits: vec![],
 			};
 		}
 
@@ -155,15 +161,6 @@ impl AccountingResult {
 			let track = project.get_track(&isrc).unwrap();
 			statement.isrc = track.main_isrc.clone();
 			statement.title = track.title.clone();
-			statement.splits = track
-				.splits
-				.iter()
-				.map(|split| TrackStatementSplits {
-					share: split.share.clone(),
-					name: split.name.clone(),
-					net_royalties: statement.net_amount.clone() * (split.share.clone() / 100),
-				})
-				.collect();
 
 			ensure!(isrc != "");
 			ensure!(isrc == statement.isrc.as_str());
@@ -171,20 +168,32 @@ impl AccountingResult {
 
 		Ok(statements)
 	}
-	fn generate_artist_statements(track_statements: &TrackStatements) -> Result<ArtistStatements> {
-		let mut artist_statements: ArtistStatements = HashMap::new();
+	fn generate_artist_statements(
+		track_statements: &TrackStatementsMap,
+		project: &Project,
+	) -> Result<ArtistStatementsMap> {
+		let mut artist_statements: ArtistStatementsMap = HashMap::new();
 
 		for track_statement in track_statements.values() {
-			for split in &track_statement.splits {
+			let track = project.get_track(&track_statement.isrc).unwrap();
+			for split in &track.splits {
 				let artist_statement =
 					artist_statements
 						.entry(split.name.clone())
 						.or_insert_with(|| ArtistStatement {
 							name: split.name.clone(),
 							net_royalties: BigDecimal::zero(),
+							tracks: vec![],
 						});
-				artist_statement.net_royalties +=
-					split.net_royalties.clone().max(BigDecimal::zero());
+				let artist_track_statement = ArtistTrackStatement {
+					isrc: track_statement.isrc.clone(),
+					net_royalties: track_statement.net_amount.clone() * pct_to_factor(&split.share),
+				};
+				artist_statement.net_royalties += artist_track_statement
+					.net_royalties
+					.clone()
+					.max(BigDecimal::zero());
+				artist_statement.tracks.push(artist_track_statement);
 			}
 		}
 
@@ -192,44 +201,53 @@ impl AccountingResult {
 	}
 }
 
-#[test]
-fn test_generate_artist_statements() {
-	let track_statements = vec![
-		TrackStatement {
-			isrc: "A".to_string(),
-			title: "Salvatore Ganacci - Fight Dirty".to_string(),
-			splits: vec![TrackStatementSplits {
-				share: BigDecimal::from(100),
-				name: "Salvatore Ganacci".to_string(),
-				net_royalties: BigDecimal::from(10),
-			}],
-			..Default::default()
-		},
-		TrackStatement {
-			isrc: "B".to_string(),
-			title: "Salvatore Ganacci - Take Me To America".to_string(),
-			splits: vec![TrackStatementSplits {
-				share: BigDecimal::from(100),
-				name: "Salvatore Ganacci".to_string(),
-				net_royalties: BigDecimal::from(-3),
-			}],
-			..Default::default()
-		},
-	];
-	let track_statements = track_statements
-		.into_iter()
-		.map(|track_statement| (track_statement.isrc.clone(), track_statement))
-		.collect::<HashMap<_, _>>();
-	let artist_statements =
-		AccountingResult::generate_artist_statements(&track_statements).unwrap();
-	assert_eq!(artist_statements.len(), 1);
-	assert_eq!(
-		artist_statements["Salvatore Ganacci"].net_royalties,
-		BigDecimal::from(10)
-	);
+#[cfg(test)]
+mod test {
+	use crate::project_data::{AccountingResult, ArtistTrackStatement, TrackStatement};
+	use bigdecimal::BigDecimal;
+	use maplit::hashmap;
+
+	#[test]
+	fn test_generate_artist_statements() {
+		let project = crate::earnings_report::test::create_mock_project();
+		let track_statements = hashmap! {
+			"A".to_string() => TrackStatement {
+				isrc: "A".to_string(),
+				title: "Salvatore Ganacci - Fight Dirty".to_string(),
+				net_amount: BigDecimal::from(20),
+				..Default::default()
+			},
+			"B".to_string() => TrackStatement {
+				isrc: "B".to_string(),
+				title: "Salvatore Ganacci - Take Me To America".to_string(),
+				net_amount: BigDecimal::from(-6),
+				..Default::default()
+			},
+		};
+		let artist_statements =
+			AccountingResult::generate_artist_statements(&track_statements, &project).unwrap();
+		assert_eq!(artist_statements.len(), 1);
+		assert_eq!(
+			artist_statements["Salvatore Ganacci"].net_royalties,
+			BigDecimal::from(10)
+		);
+		assert_eq!(
+			artist_statements["Salvatore Ganacci"].tracks,
+			vec![
+				ArtistTrackStatement {
+					isrc: "A".to_string(),
+					net_royalties: BigDecimal::from(10),
+				},
+				ArtistTrackStatement {
+					isrc: "B".to_string(),
+					net_royalties: BigDecimal::from(0),
+				},
+			]
+		);
+	}
 }
 
-type TrackStatements = HashMap<String, TrackStatement>;
+type TrackStatementsMap = HashMap<String, TrackStatement>;
 
 /// ## Example
 ///
@@ -251,15 +269,6 @@ struct TrackStatement {
 	new_costs: BigDecimal,
 	/// All-time track royalties minus all-time track costs
 	net_amount: BigDecimal,
-	splits: Vec<TrackStatementSplits>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TrackStatementSplits {
-	pub share: BigDecimal,
-	pub name: String,
-	pub net_royalties: BigDecimal,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -267,5 +276,13 @@ pub struct TrackStatementSplits {
 struct ArtistStatement {
 	name: String,
 	net_royalties: BigDecimal,
+	tracks: Vec<ArtistTrackStatement>,
 }
-type ArtistStatements = HashMap<String, ArtistStatement>;
+type ArtistStatementsMap = HashMap<String, ArtistStatement>;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ArtistTrackStatement {
+	pub isrc: String,
+	pub net_royalties: BigDecimal,
+}
