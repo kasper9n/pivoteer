@@ -211,27 +211,32 @@ impl AccountingResult {
 		Ok(artist_statements)
 	}
 	pub fn export(&self) -> Export {
+		let artist_statements = self
+			.artist_statements
+			.iter()
+			.map(|(payee, statement)| {
+				return ArtistStatementExport {
+					payee: payee.clone(),
+					net_royalties: statement.net_royalties.to_string(),
+					tracks: statement
+						.tracks
+						.iter()
+						.map(|ats| {
+							let track_statement = self.track_statements.get(&ats.isrc).unwrap();
+							return ArtistTrackStatementExport {
+								isrc: ats.isrc.clone(),
+								title: track_statement.title.clone(),
+								gross_royalties: track_statement.gross_royalties.clone(),
+								net_royalties: ats.net_royalties.clone(),
+							};
+						})
+						.collect(),
+				};
+			})
+			.collect();
 		Export {
 			name: self.name.clone(),
-			artist_statements: self
-				.artist_statements
-				.iter()
-				.map(|(payee, statement)| {
-					return ArtistStatementExport {
-						payee: payee.clone(),
-						net_royalties: statement.net_royalties.to_string(),
-						tracks: statement
-							.tracks
-							.iter()
-							.map(|t_s| ArtistTrackStatementExport {
-								isrc: t_s.isrc.clone(),
-								title: self.track_statements.get(&t_s.isrc).unwrap().title.clone(),
-								net_royalties: t_s.net_royalties.clone(),
-							})
-							.collect(),
-					};
-				})
-				.collect(),
+			artist_statements,
 		}
 	}
 }
@@ -251,6 +256,7 @@ pub struct ArtistStatementExport {
 struct ArtistTrackStatementExport {
 	pub isrc: String,
 	pub title: String,
+	pub gross_royalties: BigDecimal,
 	pub net_royalties: BigDecimal,
 }
 
