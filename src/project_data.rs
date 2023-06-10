@@ -223,9 +223,10 @@ impl AccountingResult {
 						tracks: statement
 							.tracks
 							.iter()
-							.map(|t| ArtistTrackStatement {
-								isrc: t.isrc.clone(),
-								net_royalties: t.net_royalties.clone(),
+							.map(|t_s| ArtistTrackStatementExport {
+								isrc: t_s.isrc.clone(),
+								title: self.track_statements.get(&t_s.isrc).unwrap().title.clone(),
+								net_royalties: t_s.net_royalties.clone(),
 							})
 							.collect(),
 					};
@@ -244,7 +245,13 @@ pub struct Export {
 pub struct ArtistStatementExport {
 	payee: String,
 	net_royalties: String,
-	tracks: Vec<ArtistTrackStatement>,
+	tracks: Vec<ArtistTrackStatementExport>,
+}
+#[derive(Serialize)]
+struct ArtistTrackStatementExport {
+	pub isrc: String,
+	pub title: String,
+	pub net_royalties: BigDecimal,
 }
 
 #[cfg(test)]
@@ -293,6 +300,7 @@ mod test {
 	}
 }
 
+/// ISRC -> TrackStatement
 type TrackStatementsMap = HashMap<String, TrackStatement>;
 
 /// ## Example
