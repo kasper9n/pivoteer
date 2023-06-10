@@ -17,6 +17,7 @@ anyhow = "1.0.71"
 jsonc-parser = { version = "0.21.1", features = ["serde"] }
 clap = { version = "4.3.0", features = ["derive"] }
 maplit = "1.0.2"
+dirs-next = "2.0.0"
 
 [profile.dev]
 opt-level = 1

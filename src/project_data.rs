@@ -1,4 +1,5 @@
 use crate::earnings_report::{AccountingPeriod, Project};
+use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
@@ -44,11 +45,7 @@ impl ProjectData {
 	}
 
 	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
-		let mut buf = Vec::new();
-		let formatter = serde_json::ser::PrettyFormatter::with_indent(b"\t");
-		let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-		self.serialize(&mut ser)
-			.context("Failed to serialize data")?;
+		let buf = to_json_string_pretty(&self)?;
 		fs::write(data_file_path, buf).context("Failed to write data file")?;
 		Ok(())
 	}
@@ -213,6 +210,41 @@ impl AccountingResult {
 
 		Ok(artist_statements)
 	}
+	pub fn export(&self) -> Export {
+		Export {
+			name: self.name.clone(),
+			artist_statements: self
+				.artist_statements
+				.iter()
+				.map(|(payee, statement)| {
+					return ArtistStatementExport {
+						payee: payee.clone(),
+						net_royalties: statement.net_royalties.to_string(),
+						tracks: statement
+							.tracks
+							.iter()
+							.map(|t| ArtistTrackStatement {
+								isrc: t.isrc.clone(),
+								net_royalties: t.net_royalties.clone(),
+							})
+							.collect(),
+					};
+				})
+				.collect(),
+		}
+	}
+}
+
+#[derive(Serialize)]
+pub struct Export {
+	name: String,
+	artist_statements: Vec<ArtistStatementExport>,
+}
+#[derive(Serialize)]
+pub struct ArtistStatementExport {
+	payee: String,
+	net_royalties: String,
+	tracks: Vec<ArtistTrackStatement>,
 }
 
 #[cfg(test)]
