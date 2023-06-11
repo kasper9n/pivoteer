@@ -2,7 +2,7 @@ use crate::earnings_report::{AccountingPeriod, Project};
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::{BigDecimal, Zero, Signed};
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -141,8 +141,6 @@ impl AccountingResult {
 			let opening_net_amount = statement.opening_net_amount.clone();
 			let gross_royalties = sales_info.gross_royalties;
 			let new_costs = statement.new_costs.clone();
-			let net_amount =
-				opening_net_amount.clone() + gross_royalties.clone() - new_costs.clone();
 
 			*statement = TrackStatement {
 				isrc: "".to_string(),
@@ -150,7 +148,7 @@ impl AccountingResult {
 				opening_net_amount,
 				gross_royalties,
 				new_costs,
-				net_amount: net_amount.clone(),
+				net_amount: BigDecimal::zero(),
 			};
 		}
 
@@ -158,6 +156,9 @@ impl AccountingResult {
 		for (isrc, statement) in &mut statements {
 			let track = project.get_track(&isrc).unwrap();
 			statement.isrc = track.main_isrc.clone();
+			statement.net_amount = statement.opening_net_amount.clone()
+				+ statement.gross_royalties.clone()
+				- statement.new_costs.clone();
 			statement.title = track.title.clone();
 
 			ensure!(isrc != "");
@@ -184,12 +185,11 @@ impl AccountingResult {
 						});
 				let artist_track_statement = ArtistTrackStatement {
 					isrc: track_statement.isrc.clone(),
-					net_royalties: track_statement.net_amount.clone() * pct_to_factor(&split.share),
+					net_royalties: track_statement.payable() * pct_to_factor(&split.share),
 				};
-				artist_statement.net_royalties += artist_track_statement
-					.net_royalties
-					.clone()
-					.max(BigDecimal::zero());
+				if artist_track_statement.net_royalties.is_positive() {
+					artist_statement.net_royalties += artist_track_statement.net_royalties.clone();
+				}
 				artist_statement.tracks.push(artist_track_statement);
 				// sort tracks for determinism
 				artist_statement.tracks.sort_unstable_by(|a, b| {
@@ -223,10 +223,12 @@ impl AccountingResult {
 						.iter()
 						.map(|ats| {
 							let track_statement = self.track_statements.get(&ats.isrc).unwrap();
+							let payable = track_statement.payable();
 							return ArtistTrackStatementExport {
 								isrc: ats.isrc.clone(),
 								title: track_statement.title.clone(),
 								gross_royalties: track_statement.gross_royalties.clone(),
+								payable_royalties: payable.clone(),
 								net_royalties: ats.net_royalties.clone(),
 							};
 						})
@@ -257,6 +259,8 @@ struct ArtistTrackStatementExport {
 	pub isrc: String,
 	pub title: String,
 	pub gross_royalties: BigDecimal,
+	/// Artist-payable royalties from this statement. Gross royalties - costs - negative opening balance
+	pub payable_royalties: BigDecimal,
 	pub net_royalties: BigDecimal,
 }
 
@@ -329,6 +333,13 @@ struct TrackStatement {
 	new_costs: BigDecimal,
 	/// All-time track royalties minus all-time track costs
 	net_amount: BigDecimal,
+}
+impl TrackStatement {
+	/// Artist-payable royalties from this statement. Gross royalties - costs - negative opening balance
+	pub fn payable(&self) -> BigDecimal {
+		let negative_opening_balance = self.opening_net_amount.clone().min(BigDecimal::zero());
+		self.gross_royalties.clone() - self.new_costs.clone() + negative_opening_balance
+	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
