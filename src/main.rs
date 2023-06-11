@@ -37,16 +37,15 @@ fn main() -> Result<()> {
 	project.verify()?;
 
 	if args.export {
-		let results = project.data.accounting_period_results;
-		let result = results
-			.into_iter()
-			.find(|result| result.name == args.accounting_period_name)
-			.context("No results")?;
+		let result = project
+			.data
+			.get_accounting_result(&args.accounting_period_name)
+			.context("No result")?;
 		let export = result.export();
 		let buf = to_json_string_pretty(&export)?;
 		let file_path = dirs_next::download_dir()
 			.context("Failed to get download dir")?
-			.join(result.name + ".json");
+			.join(result.name.to_string() + ".json");
 		let mut file = OpenOptions::new()
 			.write(true)
 			.create_new(true)
@@ -61,7 +60,7 @@ fn main() -> Result<()> {
 	let accounting_result = accounting_period.generate_result(&project)?;
 
 	if args.save {
-		project.save_result(accounting_result)?;
+		project.add_and_save_result(accounting_result)?;
 	}
 
 	Ok(())

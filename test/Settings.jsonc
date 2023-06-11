@@ -1,0 +1,46 @@
+{
+  "inernal_data_file": "Internal data empty.json",
+  "accounting_periods": [
+		{
+      "name": "1999 Q1",
+      "previous_period": "Initial",
+			"landr": ["1-landr.csv"],
+			"recoupments": [
+        { "isrc": "B", "date": "1999-01-01", "expense": 20, "recoup": 6, "name": "Salvatore Ganacci - Take Me To America" }
+			],
+			"payouts": [
+				// test statement generation for payees that got an advance, but have never got any track royalties
+        { "date": "2023-03-08", "amount": -100, "name": "Someone that got an advance" }
+			]
+		},
+		{
+      "name": "1999 Q2",
+      "previous_period": "1999 Q1",
+			"recoupments": [],
+			"payouts": []
+		}
+	],
+	"albums": [],
+	"tracks": [
+		{
+      "isrc": "A",
+      "single_upcs": [],
+      "title": "Salvatore Ganacci - Fight Dirty",
+      "max_recoup": 0,
+      "expenses": 0,
+      "recoup": 0,
+      "label_share": 50,
+      "splits": [{ "name": "Salvatore Ganacci", "share": "50" }]
+    },
+		{
+      "isrc": "B",
+      "single_upcs": [],
+      "title": "Salvatore Ganacci - Take Me To America",
+      "max_recoup": 6,
+      "expenses": 0,
+      "recoup": 0,
+      "label_share": 50,
+      "splits": [{ "name": "Salvatore Ganacci", "share": "50" }]
+    }
+	]
+}

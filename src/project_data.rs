@@ -1,8 +1,9 @@
 use crate::earnings_report::{AccountingPeriod, Project};
+use crate::settings::Payout;
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Zero, Signed};
+use bigdecimal::{BigDecimal, Signed, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -14,12 +15,11 @@ fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 	share * BigDecimal::from_str("0.01").unwrap()
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectData {
 	pub accounting_period_results: Vec<AccountingResult>,
 }
-
 impl ProjectData {
 	pub fn open(data_file_path: &PathBuf) -> Result<Self> {
 		let internal_data_str = fs::read_to_string(&data_file_path)?;
@@ -44,6 +44,12 @@ impl ProjectData {
 		Ok(())
 	}
 
+	pub fn get_accounting_result(&self, name: &str) -> Option<&AccountingResult> {
+		self.accounting_period_results
+			.iter()
+			.find(|accounting_period| accounting_period.name == name)
+	}
+
 	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
 		let buf = to_json_string_pretty(&self)?;
 		fs::write(data_file_path, buf).context("Failed to write data file")?;
@@ -61,10 +67,12 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 	BTreeMap::from_iter(items).serialize(serializer)
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
+	pub previous_name: String,
+	payouts: Vec<Payout>,
 	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatementsMap,
 	#[serde(serialize_with = "sorted_map")]
@@ -77,9 +85,12 @@ impl AccountingResult {
 		let track_sales_report = sales_report.into_track_sales_report(&project);
 		let track_statements =
 			Self::generate_track_statements(track_sales_report, period, project)?;
-		let artist_statements = Self::generate_artist_statements(&track_statements, &project)?;
+		let artist_statements =
+			Self::generate_artist_statements(&track_statements, period, &project)?;
 		Ok(AccountingResult {
 			name: period.name.clone(),
+			previous_name: period.previous_period.clone(),
+			payouts: period.payouts.clone(),
 			track_statements,
 			artist_statements,
 		})
@@ -169,9 +180,19 @@ impl AccountingResult {
 	}
 	fn generate_artist_statements(
 		track_statements: &TrackStatementsMap,
+		period: &AccountingPeriod,
 		project: &Project,
 	) -> Result<ArtistStatementsMap> {
 		let mut artist_statements: ArtistStatementsMap = HashMap::new();
+		let previous_result = match period.previous_period.as_str() {
+			"Initial" => None,
+			previous_period => Some(
+				project
+					.data
+					.get_accounting_result(&previous_period)
+					.unwrap(),
+			),
+		};
 
 		for track_statement in track_statements.values() {
 			let track = project.get_track(&track_statement.isrc).unwrap();
@@ -179,9 +200,14 @@ impl AccountingResult {
 				let artist_statement =
 					artist_statements
 						.entry(split.name.clone())
-						.or_insert_with(|| ArtistStatement {
-							net_royalties: BigDecimal::zero(),
-							tracks: vec![],
+						.or_insert_with(|| {
+							return ArtistStatement {
+								previous_balance: None,
+								paid_out: BigDecimal::zero(),
+								net_royalties: BigDecimal::zero(),
+								amount_due: BigDecimal::zero(),
+								tracks: vec![],
+							};
 						});
 				let artist_track_statement = ArtistTrackStatement {
 					isrc: track_statement.isrc.clone(),
@@ -208,6 +234,66 @@ impl AccountingResult {
 			}
 		}
 
+		// Add statements for artists that have past statements, but no track royalties this period
+		if let Some(previous_result) = previous_result {
+			for (name, statement) in previous_result.artist_statements.iter() {
+				artist_statements
+					.entry(name.clone())
+					.or_insert(ArtistStatement {
+						previous_balance: Some(statement.amount_due.clone()),
+						paid_out: BigDecimal::zero(),
+						net_royalties: BigDecimal::zero(),
+						amount_due: BigDecimal::zero(),
+						tracks: vec![],
+					});
+			}
+		}
+
+		// Add statements for artists that were paid (advance), but have no track royalties this period
+		for payout in period.payouts.iter() {
+			let name = payout.name.clone();
+			artist_statements.entry(name).or_insert_with(|| {
+				println!(
+					"Warning: Payout to artist that has no track royalties \"{}\"",
+					payout.name
+				);
+				ArtistStatement {
+					previous_balance: None,
+					paid_out: BigDecimal::zero(),
+					net_royalties: BigDecimal::zero(),
+					amount_due: BigDecimal::zero(),
+					tracks: vec![],
+				}
+			});
+		}
+
+		let artist_statements = artist_statements
+			.into_iter()
+			.map(|(name, artist_statement)| {
+				let previous_statement = previous_result
+					.map(|pr| pr.artist_statements.get(&name))
+					.flatten();
+				let previous_balance = previous_statement.map(|ps| ps.amount_due.clone());
+				let paid_out = period
+					.payouts
+					.iter()
+					.filter(|payout| payout.name == *name)
+					.fold(BigDecimal::zero(), |accumulator, b| {
+						accumulator + b.amount.clone()
+					});
+				let amount_due = previous_balance.clone().unwrap_or_default()
+					+ paid_out.clone() + artist_statement.net_royalties.clone();
+				let artist_statement = ArtistStatement {
+					previous_balance,
+					paid_out,
+					net_royalties: artist_statement.net_royalties,
+					amount_due,
+					tracks: artist_statement.tracks,
+				};
+				(name, artist_statement)
+			})
+			.collect();
+
 		Ok(artist_statements)
 	}
 	pub fn export(&self) -> Export {
@@ -217,7 +303,10 @@ impl AccountingResult {
 			.map(|(payee, statement)| {
 				return ArtistStatementExport {
 					payee: payee.clone(),
+					previous_balance: statement.previous_balance.as_ref().map(|pb| pb.to_string()),
+					paid_out: statement.paid_out.to_string(),
 					net_royalties: statement.net_royalties.to_string(),
+					amount_due: statement.amount_due.to_string(),
 					tracks: statement
 						.tracks
 						.iter()
@@ -251,7 +340,10 @@ pub struct Export {
 #[derive(Serialize)]
 pub struct ArtistStatementExport {
 	payee: String,
+	previous_balance: Option<String>,
+	paid_out: String,
 	net_royalties: String,
+	amount_due: String,
 	tracks: Vec<ArtistTrackStatementExport>,
 }
 #[derive(Serialize)]
@@ -266,47 +358,36 @@ struct ArtistTrackStatementExport {
 
 #[cfg(test)]
 mod test {
-	use crate::project_data::{AccountingResult, ArtistTrackStatement, TrackStatement};
-	use bigdecimal::BigDecimal;
-	use maplit::hashmap;
+	use crate::earnings_report::Project;
+	use crate::project_data::ProjectData;
+	use anyhow::Result;
+	use pretty_assertions::assert_eq;
+	use std::path::PathBuf;
 
 	#[test]
-	fn test_generate_artist_statements() {
-		let project = crate::earnings_report::test::create_mock_project();
-		let track_statements = hashmap! {
-			"A".to_string() => TrackStatement {
-				isrc: "A".to_string(),
-				title: "Salvatore Ganacci - Fight Dirty".to_string(),
-				net_amount: BigDecimal::from(20),
-				..Default::default()
-			},
-			"B".to_string() => TrackStatement {
-				isrc: "B".to_string(),
-				title: "Salvatore Ganacci - Take Me To America".to_string(),
-				net_amount: BigDecimal::from(-6),
-				..Default::default()
-			},
-		};
-		let artist_statements =
-			AccountingResult::generate_artist_statements(&track_statements, &project).unwrap();
-		assert_eq!(artist_statements.len(), 1);
+	fn test_generate_artist_statements() -> Result<()> {
+		let mut project = Project::load(PathBuf::from("test/Settings.jsonc"))?;
+
+		let q1_result = project
+			.get_accounting_period("1999 Q1")
+			.unwrap()
+			.generate_result(&project)?;
+		project.add_result(q1_result)?;
+
+		let q2_result = project
+			.get_accounting_period("1999 Q2")
+			.unwrap()
+			.generate_result(&project)?;
+		project.add_result(q2_result)?;
+
+		let expected_data =
+			ProjectData::open(&PathBuf::from("test/Internal data expected.json")).unwrap();
+
 		assert_eq!(
-			artist_statements["Salvatore Ganacci"].net_royalties,
-			BigDecimal::from(10)
+			project.data.accounting_period_results,
+			expected_data.accounting_period_results
 		);
-		assert_eq!(
-			artist_statements["Salvatore Ganacci"].tracks,
-			vec![
-				ArtistTrackStatement {
-					isrc: "A".to_string(),
-					net_royalties: BigDecimal::from(10),
-				},
-				ArtistTrackStatement {
-					isrc: "B".to_string(),
-					net_royalties: BigDecimal::from(0),
-				},
-			]
-		);
+		Ok(())
 	}
 }
 
@@ -321,7 +402,7 @@ type TrackStatementsMap = HashMap<String, TrackStatement>;
 /// | gross_royalties    |    50 |    50 |   250 |   200 |    50 |
 /// | new_costs          |  -300 |     0 |     0 |     0 |  -400 |
 /// | new_amount         |  -250 |  -200 |    50 |   250 |  -100 |
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct TrackStatement {
 	isrc: String,
@@ -342,10 +423,13 @@ impl TrackStatement {
 	}
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArtistStatement {
+	previous_balance: Option<BigDecimal>,
+	paid_out: BigDecimal,
 	net_royalties: BigDecimal,
+	amount_due: BigDecimal,
 	tracks: Vec<ArtistTrackStatement>,
 }
 type ArtistStatementsMap = HashMap<String, ArtistStatement>;
