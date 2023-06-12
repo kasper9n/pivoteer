@@ -36,7 +36,7 @@ pub struct AccountingPeriodInfo {
 	pub name: String,
 	pub previous_period: String,
 	pub recoupments: Vec<Recoupment>,
-	payouts: Vec<Payout>,
+	pub payouts: Vec<Payout>,
 	#[serde(flatten)]
 	pub sources_by_platform: HashMap<String, Vec<String>>,
 }
@@ -56,10 +56,7 @@ impl AccountingPeriodInfo {
 								file_path, self.name, platform
 							);
 						}
-						Source {
-							file_path: PathBuf::from(dir).join(file_path),
-							kind,
-						}
+						Source { file_path, kind }
 					})
 					.collect::<Vec<_>>();
 				sources
@@ -78,7 +75,7 @@ pub struct Recoupment {
 	pub name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Debug, Clone, Deserialize, PartialEq)]
 pub struct Payout {
 	pub date: String,
 	pub amount: BigDecimal,

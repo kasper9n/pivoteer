@@ -1,5 +1,5 @@
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::settings::{Album, Recoupment, Settings, Track};
+use crate::settings::{Album, Payout, Recoupment, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Result};
@@ -31,6 +31,7 @@ impl Project {
 					name: accounting_period.name,
 					previous_period: accounting_period.previous_period,
 					sources,
+					payouts: accounting_period.payouts,
 					recoupments: accounting_period.recoupments,
 				}
 			})
@@ -179,6 +180,7 @@ pub struct AccountingPeriod {
 	pub name: String,
 	pub previous_period: String,
 	pub recoupments: Vec<Recoupment>,
+	pub payouts: Vec<Payout>,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {

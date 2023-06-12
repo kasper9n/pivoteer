@@ -1,8 +1,9 @@
 use crate::earnings_report::{AccountingPeriod, Project};
+use crate::settings::Payout;
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Zero, Signed};
+use bigdecimal::{BigDecimal, Signed, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -19,7 +20,6 @@ fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 pub struct ProjectData {
 	pub accounting_period_results: Vec<AccountingResult>,
 }
-
 impl ProjectData {
 	pub fn open(data_file_path: &PathBuf) -> Result<Self> {
 		let internal_data_str = fs::read_to_string(&data_file_path)?;
@@ -44,6 +44,12 @@ impl ProjectData {
 		Ok(())
 	}
 
+	pub fn get_accounting_result(&self, name: &str) -> Option<&AccountingResult> {
+		self.accounting_period_results
+			.iter()
+			.find(|accounting_period| accounting_period.name == name)
+	}
+
 	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
 		let buf = to_json_string_pretty(&self)?;
 		fs::write(data_file_path, buf).context("Failed to write data file")?;
@@ -65,6 +71,8 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
+	pub previous_name: String,
+	payouts: Vec<Payout>,
 	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatementsMap,
 	#[serde(serialize_with = "sorted_map")]
@@ -80,6 +88,8 @@ impl AccountingResult {
 		let artist_statements = Self::generate_artist_statements(&track_statements, &project)?;
 		Ok(AccountingResult {
 			name: period.name.clone(),
+			previous_name: period.previous_period.clone(),
+			payouts: period.payouts.clone(),
 			track_statements,
 			artist_statements,
 		})
