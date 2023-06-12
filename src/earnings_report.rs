@@ -155,12 +155,12 @@ impl Project {
 			.iter()
 			.find(|accounting_period| accounting_period.name == name)
 	}
-	pub fn save_result(&mut self, result: AccountingResult) -> Result<()> {
+	pub fn add_result(&mut self, result: AccountingResult) -> Result<()> {
 		let period = self.get_accounting_period(&result.name).unwrap();
 		match self.data.accounting_period_results.last() {
 			Some(last_result) => {
 				if last_result.name != period.previous_period {
-					bail!("Last result not previous_period");
+					bail!("Last result not previous_period. Maybe this was already generated?");
 				}
 			}
 			None => {
@@ -170,7 +170,17 @@ impl Project {
 			}
 		}
 		self.data.accounting_period_results.push(result);
-		self.data.verify(&self)?;
+		match self.data.verify(&self) {
+			Ok(_) => {}
+			Err(e) => {
+				self.data.accounting_period_results.pop();
+				bail!(e);
+			}
+		};
+		Ok(())
+	}
+	pub fn add_and_save_result(&mut self, result: AccountingResult) -> Result<()> {
+		self.add_result(result)?;
 		self.data.save(&self.data_file_path)?;
 		Ok(())
 	}
@@ -314,59 +324,5 @@ impl SalesReport {
 	}
 	pub fn into_track_sales_report(self, project: &Project) -> TrackSalesReport {
 		TrackSalesReport::from_sales_report(self, project)
-	}
-}
-
-#[cfg(test)]
-pub mod test {
-	use crate::earnings_report::Project;
-	use crate::project_data::ProjectData;
-	use crate::settings::{Split, Track};
-	use bigdecimal::{BigDecimal, Zero};
-	use maplit::hashmap;
-	use std::path::PathBuf;
-	pub fn create_mock_project() -> Project {
-		Project {
-			data_file_path: PathBuf::new(),
-			accounting_periods: vec![],
-			data: ProjectData {
-				accounting_period_results: vec![],
-			},
-			tracks: vec![
-				Track {
-					main_isrc: "A".to_string(),
-					title: "Salvatore Ganacci - Fight Dirty".to_string(),
-					secondary_isrcs: None,
-					single_upcs: vec![],
-					max_recoup: BigDecimal::zero(),
-					expenses: BigDecimal::zero(),
-					recoup: BigDecimal::zero(),
-					label_share: BigDecimal::zero(),
-					splits: vec![Split {
-						name: "Salvatore Ganacci".to_string(),
-						share: BigDecimal::from(50),
-					}],
-				},
-				Track {
-					main_isrc: "B".to_string(),
-					title: "Salvatore Ganacci - Take Me To America".to_string(),
-					secondary_isrcs: None,
-					single_upcs: vec![],
-					max_recoup: BigDecimal::zero(),
-					expenses: BigDecimal::zero(),
-					recoup: BigDecimal::zero(),
-					label_share: BigDecimal::zero(),
-					splits: vec![Split {
-						name: "Salvatore Ganacci".to_string(),
-						share: BigDecimal::from(50),
-					}],
-				},
-			],
-			isrcs: hashmap! {
-				"A".to_string() => 0,
-				"B".to_string() => 1,
-			},
-			albums: hashmap! {},
-		}
 	}
 }
