@@ -108,7 +108,12 @@ impl Project {
 				.unwrap_or(BigDecimal::from(0));
 			let summed_shares = track.label_share.clone() + summed_artist_shares;
 			if summed_shares != BigDecimal::from(100) {
-				bail!("Track {} splits don't add up", track.title);
+				bail!(
+					"Track {} splits don't add up. The splits are:\nLabel split: {}\nArtist splits: {:#?}",
+					track.title,
+					track.label_share,
+					track.splits
+				);
 			}
 		}
 		Ok(())

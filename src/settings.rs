@@ -115,7 +115,7 @@ impl Track {
 	}
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Split {
 	pub share: BigDecimal,
