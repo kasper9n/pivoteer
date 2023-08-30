@@ -7,7 +7,7 @@ use bigdecimal::BigDecimal;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -95,7 +95,23 @@ impl Project {
 		}
 		self.verify_accounting_periods()?;
 		self.verify_tracks()?;
+		self.verify_sources()?;
 		self.data.verify(self)?;
+		Ok(())
+	}
+	fn verify_sources(&self) -> Result<()> {
+		let mut paths = HashSet::new();
+		for accounting_period in &self.accounting_periods {
+			for source in &accounting_period.sources {
+				let is_new = paths.insert(source.file_path.canonicalize()?);
+				if !is_new {
+					bail!(
+						"Source file is listed multiple times: {:?}",
+						source.file_path
+					);
+				}
+			}
+		}
 		Ok(())
 	}
 	fn verify_tracks(&self) -> Result<()> {

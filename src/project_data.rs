@@ -7,8 +7,9 @@ use bigdecimal::{BigDecimal, Signed, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
@@ -336,6 +337,21 @@ impl AccountingResult {
 pub struct Export {
 	name: String,
 	artist_statements: Vec<ArtistStatementExport>,
+}
+impl Export {
+	pub fn save_to_downloads<P: AsRef<Path>>(&self, file_name: P) -> Result<()> {
+		let buf = to_json_string_pretty(&self)?;
+		let file_path = dirs_next::download_dir()
+			.context("Failed to get download dir")?
+			.join(file_name);
+		let mut file = OpenOptions::new()
+			.write(true)
+			.create_new(true)
+			.open(&file_path)
+			.with_context(|| format!("Could not export to {:?}", file_path))?;
+		file.write_all(&buf)?;
+		Ok(())
+	}
 }
 #[derive(Serialize)]
 pub struct ArtistStatementExport {

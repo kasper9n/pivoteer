@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use earnings_report::Project;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::PathBuf;
 
 mod earnings_report;
@@ -13,54 +11,76 @@ mod track_sales_report;
 mod transformers;
 
 #[derive(Parser)]
-#[command(about, long_about = None)]
-struct Args {
+#[command(about, long_about)]
+struct Cli {
 	/// Path to .jsonc settings file
 	settings_path: PathBuf,
+	#[command(subcommand)]
+	command: Option<Commands>,
+}
 
+#[derive(Subcommand)]
+enum Commands {
+	/// Generate results for an accounting period
+	Generate(Generate),
+	/// Export already-generated accounting results
+	Export(Export),
+}
+
+#[derive(Args)]
+struct Generate {
 	/// Accounting period to generate results for
 	accounting_period_name: String,
-
-	// Save accounting period results
+	/// Save accounting period results
 	#[arg(long)]
 	save: bool,
-
-	// Export result to Kyper
+	/// Export result to Kyper
 	#[arg(long)]
 	export: bool,
 }
 
+#[derive(Args)]
+struct Export {
+	/// Accounting period to generate results for
+	accounting_period_name: String,
+}
+
 fn main() -> Result<()> {
-	let args = Args::parse();
+	let args = Cli::parse();
 
 	let mut project = Project::load(PathBuf::from(args.settings_path))?;
 	project.verify()?;
 
-	if args.export {
-		let result = project
-			.data
-			.get_accounting_result(&args.accounting_period_name)
-			.context("No result")?;
-		let export = result.export();
-		let buf = to_json_string_pretty(&export)?;
-		let file_path = dirs_next::download_dir()
-			.context("Failed to get download dir")?
-			.join(result.name.to_string() + ".json");
-		let mut file = OpenOptions::new()
-			.write(true)
-			.create_new(true)
-			.open(&file_path)?;
-		file.write_all(&buf)?;
+	let command = match args.command {
+		Some(command) => command,
+		None => {
+			println!("No command given");
+			return Ok(());
+		}
+	};
 
-		return Ok(());
-	}
-	let accounting_period = project
-		.get_accounting_period(&args.accounting_period_name)
-		.context("Accounting period from argument not found")?;
-	let accounting_result = accounting_period.generate_result(&project)?;
+	match command {
+		Commands::Generate(args) => {
+			let accounting_period = project
+				.get_accounting_period(&args.accounting_period_name)
+				.context("Accounting period from argument not found")?;
+			let accounting_result = accounting_period.generate_result(&project)?;
 
-	if args.save {
-		project.add_and_save_result(accounting_result)?;
+			if args.save {
+				project.add_and_save_result(accounting_result)?;
+			}
+		}
+
+		Commands::Export(args) => {
+			let result = project
+				.data
+				.get_accounting_result(&args.accounting_period_name)
+				.context("No result")?;
+			let file_name = result.name.to_string() + ".json";
+			let export = result.export();
+			export.save_to_downloads(file_name)?;
+			return Ok(());
+		}
 	}
 
 	Ok(())
