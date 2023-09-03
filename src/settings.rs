@@ -66,7 +66,7 @@ impl AccountingPeriodInfo {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Recoupment {
 	pub isrc: String,
 	pub date: String,

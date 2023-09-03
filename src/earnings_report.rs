@@ -3,7 +3,7 @@ use crate::settings::{Album, Payout, Recoupment, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Signed};
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -152,6 +152,26 @@ impl Project {
 					next_accounting_period.name,
 					next_accounting_period.previous_period,
 					accounting_period.name,
+				)
+			}
+
+			for payout in &accounting_period.payouts {
+				ensure!(
+					payout.amount.is_negative(),
+					"Payout must be negative: {:?}",
+					payout
+				);
+			}
+			for recoupment in &accounting_period.recoupments {
+				ensure!(
+					!recoupment.expense.is_negative() && !recoupment.recoup.is_negative(),
+					"Recoupment must be positive: {:?}",
+					recoupment
+				);
+				ensure!(
+					recoupment.expense >= recoupment.recoup,
+					"Recouped more than the expense: {:?}",
+					recoupment
 				)
 			}
 		}
