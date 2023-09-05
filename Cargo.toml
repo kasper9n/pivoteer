@@ -20,6 +20,7 @@ clap = { version = "4.3", features = ["derive"] }
 maplit = "1.0"
 dirs-next = "2.0"
 pretty_assertions = "1.4"
+numeric-sort = "0.1"
 
 [profile.dev]
 opt-level = 1

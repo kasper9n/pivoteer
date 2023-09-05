@@ -5,7 +5,6 @@ use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
 use bigdecimal::{BigDecimal, Signed, Zero};
 use serde::{Deserialize, Serialize, Serializer};
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -221,16 +220,10 @@ impl AccountingResult {
 				// sort tracks for determinism
 				artist_statement.tracks.sort_unstable_by(|a, b| {
 					// net royalties (descending)
-					match b.net_royalties.cmp(&a.net_royalties) {
-						// fallback to isrcs (ascending)
-						Ordering::Equal => match a.isrc.cmp(&b.isrc) {
-							Ordering::Equal => {
-								panic!("Duplicate ISRCs in artist statement")
-							}
-							order => order,
-						},
-						order => order,
-					}
+					b.net_royalties
+						.cmp(&a.net_royalties)
+						.then_with(|| a.isrc.cmp(&b.isrc))
+						.then_with(|| panic!("Duplicate ISRCs in artist statement"))
 				})
 			}
 		}
@@ -298,34 +291,46 @@ impl AccountingResult {
 		Ok(artist_statements)
 	}
 	pub fn export(&self) -> Export {
-		let artist_statements = self
+		let mut artist_statements: Vec<_> = self
 			.artist_statements
 			.iter()
 			.map(|(payee, statement)| {
+				let mut tracks: Vec<_> = statement
+					.tracks
+					.iter()
+					.map(|ats| {
+						let track_statement = self.track_statements.get(&ats.isrc).unwrap();
+						let payable = track_statement.payable();
+						return ArtistTrackStatementExport {
+							isrc: ats.isrc.clone(),
+							title: track_statement.title.clone(),
+							gross_royalties: track_statement.gross_royalties.clone(),
+							payable_royalties: payable.clone(),
+							net_royalties: ats.net_royalties.clone(),
+						};
+					})
+					.collect();
+				tracks.sort_by(|a, b| {
+					b.net_royalties
+						.cmp(&a.net_royalties)
+						.then_with(|| a.isrc.cmp(&b.isrc))
+						.then_with(|| panic!("Sort duplicate artist statement track"))
+				});
 				return ArtistStatementExport {
 					payee: payee.clone(),
 					previous_balance: statement.previous_balance.as_ref().map(|pb| pb.to_string()),
 					paid_out: statement.paid_out.to_string(),
 					net_royalties: statement.net_royalties.to_string(),
 					amount_due: statement.amount_due.to_string(),
-					tracks: statement
-						.tracks
-						.iter()
-						.map(|ats| {
-							let track_statement = self.track_statements.get(&ats.isrc).unwrap();
-							let payable = track_statement.payable();
-							return ArtistTrackStatementExport {
-								isrc: ats.isrc.clone(),
-								title: track_statement.title.clone(),
-								gross_royalties: track_statement.gross_royalties.clone(),
-								payable_royalties: payable.clone(),
-								net_royalties: ats.net_royalties.clone(),
-							};
-						})
-						.collect(),
+					tracks,
 				};
 			})
 			.collect();
+		artist_statements.sort_by(|a, b| {
+			numeric_sort::cmp(&b.net_royalties, &a.net_royalties)
+				.then_with(|| numeric_sort::cmp(&b.payee, &a.payee))
+				.then_with(|| panic!("Sort duplicate artist statement"))
+		});
 		Export {
 			name: self.name.clone(),
 			artist_statements,
