@@ -242,6 +242,7 @@ impl AccountingPeriod {
 			.map(|source| {
 				into_sales_report(source.process_source())
 					.collect_into_rows()
+					.map_err(|e| panic!("Error processing source {:?}: {:?}", source.file_path, e))
 					.unwrap()
 			})
 			.collect();
