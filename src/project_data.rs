@@ -1,5 +1,4 @@
 use crate::earnings_report::{AccountingPeriod, Project};
-use crate::settings::Payout;
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
@@ -73,7 +72,6 @@ pub struct AccountingResult {
 	pub name: String,
 	pub previous_name: Option<String>,
 	pub is_initial: bool,
-	payouts: Vec<Payout>,
 	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatementsMap,
 	#[serde(serialize_with = "sorted_map")]
@@ -92,7 +90,6 @@ impl AccountingResult {
 			name: period.name.clone(),
 			previous_name: period.previous_period.clone(),
 			is_initial: period.is_initial,
-			payouts: period.payouts.clone(),
 			track_statements,
 			artist_statements,
 		})
@@ -235,21 +232,6 @@ impl AccountingResult {
 						tracks: vec![],
 					});
 			}
-		}
-
-		// Add statements for artists that were paid (advance), but have no track royalties this period
-		for payout in period.payouts.iter() {
-			let name = payout.name.clone();
-			artist_statements.entry(name).or_insert_with(|| {
-				println!(
-					"Warning: Payout to artist that has no track royalties \"{}\"",
-					payout.name
-				);
-				ArtistStatement {
-					net_royalties: BigDecimal::zero(),
-					tracks: vec![],
-				}
-			});
 		}
 
 		Ok(artist_statements)
