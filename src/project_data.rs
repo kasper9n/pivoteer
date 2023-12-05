@@ -202,10 +202,7 @@ impl AccountingResult {
 						.entry(split.name.clone())
 						.or_insert_with(|| {
 							return ArtistStatement {
-								previous_balance: None,
-								paid_out: BigDecimal::zero(),
 								net_royalties: BigDecimal::zero(),
-								amount_due: BigDecimal::zero(),
 								tracks: vec![],
 							};
 						});
@@ -230,14 +227,11 @@ impl AccountingResult {
 
 		// Add statements for artists that have past statements, but no track royalties this period
 		if let Some(previous_result) = previous_result {
-			for (name, statement) in previous_result.artist_statements.iter() {
+			for (name, _statement) in previous_result.artist_statements.iter() {
 				artist_statements
 					.entry(name.clone())
 					.or_insert(ArtistStatement {
-						previous_balance: Some(statement.amount_due.clone()),
-						paid_out: BigDecimal::zero(),
 						net_royalties: BigDecimal::zero(),
-						amount_due: BigDecimal::zero(),
 						tracks: vec![],
 					});
 			}
@@ -252,41 +246,11 @@ impl AccountingResult {
 					payout.name
 				);
 				ArtistStatement {
-					previous_balance: None,
-					paid_out: BigDecimal::zero(),
 					net_royalties: BigDecimal::zero(),
-					amount_due: BigDecimal::zero(),
 					tracks: vec![],
 				}
 			});
 		}
-
-		let artist_statements = artist_statements
-			.into_iter()
-			.map(|(name, artist_statement)| {
-				let previous_statement = previous_result
-					.map(|pr| pr.artist_statements.get(&name))
-					.flatten();
-				let previous_balance = previous_statement.map(|ps| ps.amount_due.clone());
-				let paid_out = period
-					.payouts
-					.iter()
-					.filter(|payout| payout.name == *name)
-					.fold(BigDecimal::zero(), |accumulator, b| {
-						accumulator + b.amount.clone()
-					});
-				let amount_due = previous_balance.clone().unwrap_or_default()
-					+ paid_out.clone() + artist_statement.net_royalties.clone();
-				let artist_statement = ArtistStatement {
-					previous_balance,
-					paid_out,
-					net_royalties: artist_statement.net_royalties,
-					amount_due,
-					tracks: artist_statement.tracks,
-				};
-				(name, artist_statement)
-			})
-			.collect();
 
 		Ok(artist_statements)
 	}
@@ -318,10 +282,7 @@ impl AccountingResult {
 				});
 				return ArtistStatementExport {
 					payee: payee.clone(),
-					previous_balance: statement.previous_balance.as_ref().map(|pb| pb.to_string()),
-					paid_out: statement.paid_out.to_string(),
 					net_royalties: statement.net_royalties.to_string(),
-					amount_due: statement.amount_due.to_string(),
 					tracks,
 				};
 			})
@@ -333,6 +294,8 @@ impl AccountingResult {
 		});
 		Export {
 			name: self.name.clone(),
+			previous_name: self.previous_name.clone().into(),
+			is_initial: self.is_initial,
 			artist_statements,
 		}
 	}
@@ -341,6 +304,8 @@ impl AccountingResult {
 #[derive(Serialize)]
 pub struct Export {
 	name: String,
+	previous_name: Option<String>,
+	is_initial: bool,
 	artist_statements: Vec<ArtistStatementExport>,
 }
 impl Export {
@@ -361,10 +326,7 @@ impl Export {
 #[derive(Serialize)]
 pub struct ArtistStatementExport {
 	payee: String,
-	previous_balance: Option<String>,
-	paid_out: String,
 	net_royalties: String,
-	amount_due: String,
 	tracks: Vec<ArtistTrackStatementExport>,
 }
 #[derive(Serialize)]
@@ -447,10 +409,7 @@ impl TrackStatement {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArtistStatement {
-	previous_balance: Option<BigDecimal>,
-	paid_out: BigDecimal,
 	net_royalties: BigDecimal,
-	amount_due: BigDecimal,
 	tracks: Vec<ArtistTrackStatement>,
 }
 type ArtistStatementsMap = HashMap<String, ArtistStatement>;

@@ -2,9 +2,14 @@
 	"accounting_period_results": [
 		{
 			"name": "1999 Q1",
-			"previous_name": "Initial",
+			"previous_name": null,
+			"is_initial": true,
 			"payouts": [
-        { "date": "2023-03-08", "amount": -100, "name": "Someone that got an advance" }
+				{
+					"date": "2023-03-08",
+					"amount": "-100",
+					"name": "Someone that got an advance"
+				}
 			],
 			"track_statements": {
 				"A": {
@@ -26,10 +31,7 @@
 			},
 			"artist_statements": {
 				"Salvatore Ganacci": {
-					"previous_balance": null,
-					"paid_out": "0",
 					"net_royalties": "10.00",
-					"amount_due": "10.00",
 					"tracks": [
 						{
 							"isrc": "A",
@@ -42,10 +44,7 @@
 					]
 				},
 				"Someone that got an advance": {
-					"previous_balance": null,
-					"paid_out": "-100",
 					"net_royalties": "0",
-					"amount_due": "-100",
 					"tracks": []
 				}
 			}
@@ -53,6 +52,7 @@
 		{
 			"name": "1999 Q2",
 			"previous_name": "1999 Q1",
+			"is_initial": false,
 			"payouts": [],
 			"track_statements": {
 				"A": {
@@ -74,10 +74,7 @@
 			},
 			"artist_statements": {
 				"Salvatore Ganacci": {
-					"previous_balance": "10.00",
-					"paid_out": "0",
 					"net_royalties": "0",
-					"amount_due": "10.00",
 					"tracks": [
 						{
 							"isrc": "A",
@@ -90,10 +87,7 @@
 					]
 				},
 				"Someone that got an advance": {
-					"previous_balance": "-100",
-					"paid_out": "0",
 					"net_royalties": "0",
-					"amount_due": "-100",
 					"tracks": []
 				}
 			}

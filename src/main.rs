@@ -16,7 +16,7 @@ struct Cli {
 	/// Path to .jsonc settings file
 	settings_path: PathBuf,
 	#[command(subcommand)]
-	command: Option<Commands>,
+	command: Commands,
 }
 
 #[derive(Subcommand)]
@@ -34,9 +34,6 @@ struct Generate {
 	/// Save accounting period results
 	#[arg(long)]
 	save: bool,
-	/// Export result to Kyper
-	#[arg(long)]
-	export: bool,
 }
 
 #[derive(Args)]
@@ -51,15 +48,7 @@ fn main() -> Result<()> {
 	let mut project = Project::load(PathBuf::from(args.settings_path))?;
 	project.verify()?;
 
-	let command = match args.command {
-		Some(command) => command,
-		None => {
-			println!("No command given");
-			return Ok(());
-		}
-	};
-
-	match command {
+	match args.command {
 		Commands::Generate(args) => {
 			let accounting_period = project
 				.get_accounting_period(&args.accounting_period_name)
@@ -68,6 +57,8 @@ fn main() -> Result<()> {
 
 			if args.save {
 				project.add_and_save_result(accounting_result)?;
+			} else {
+				println!("Finished! Re-run with --save it all seems good");
 			}
 		}
 
