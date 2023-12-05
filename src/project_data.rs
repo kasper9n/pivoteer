@@ -71,7 +71,8 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
-	pub previous_name: String,
+	pub previous_name: Option<String>,
+	pub is_initial: bool,
 	payouts: Vec<Payout>,
 	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatementsMap,
@@ -90,6 +91,7 @@ impl AccountingResult {
 		Ok(AccountingResult {
 			name: period.name.clone(),
 			previous_name: period.previous_period.clone(),
+			is_initial: period.is_initial,
 			payouts: period.payouts.clone(),
 			track_statements,
 			artist_statements,
@@ -102,25 +104,26 @@ impl AccountingResult {
 	) -> Result<TrackStatementsMap> {
 		let track_recoupments = period.map_recoupments(project)?;
 
-		let previous_net_amounts: HashMap<String, BigDecimal> = if period.previous_period
-			== "Initial"
-		{
-			HashMap::new()
-		} else {
-			let previous_result = project
-				.data
-				.accounting_period_results
-				.iter()
-				.find(|accounting_result| accounting_result.name == period.previous_period)
-				.context(format!(
-					"Could not find result from previous period \"{}\"",
-					period.previous_period
-				))?;
-			previous_result
-				.track_statements
-				.iter()
-				.map(|(isrc, track_statement)| (isrc.clone(), track_statement.net_amount.clone()))
-				.collect()
+		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.previous_period {
+			Some(previous_period) => {
+				let previous_result = project
+					.data
+					.accounting_period_results
+					.iter()
+					.find(|accounting_result| accounting_result.name == *previous_period)
+					.context(format!(
+						"Could not find result from previous period \"{}\"",
+						previous_period
+					))?;
+				previous_result
+					.track_statements
+					.iter()
+					.map(|(isrc, track_statement)| {
+						(isrc.clone(), track_statement.net_amount.clone())
+					})
+					.collect()
+			}
+			None => HashMap::new(),
 		};
 
 		// Add previous costs
@@ -184,14 +187,11 @@ impl AccountingResult {
 		project: &Project,
 	) -> Result<ArtistStatementsMap> {
 		let mut artist_statements: ArtistStatementsMap = HashMap::new();
-		let previous_result = match period.previous_period.as_str() {
-			"Initial" => None,
-			previous_period => Some(
-				project
-					.data
-					.get_accounting_result(&previous_period)
-					.unwrap(),
-			),
+		let previous_result = match &period.previous_period {
+			None => None,
+			Some(previous_period) => {
+				Some(project.data.get_accounting_result(previous_period).unwrap())
+			}
 		};
 
 		for track_statement in track_statements.values() {

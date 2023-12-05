@@ -55,7 +55,8 @@ fn prohibit_number_values(value: &serde_json::Value) {
 #[derive(Serialize, Deserialize)]
 pub struct AccountingPeriodInfo {
 	pub name: String,
-	pub previous_period: String,
+	pub previous_period: Option<String>,
+	pub is_initial: Option<bool>,
 	pub recoupments: Vec<Recoupment>,
 	pub payouts: Vec<Payout>,
 	#[serde(flatten)]

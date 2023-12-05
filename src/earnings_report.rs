@@ -29,6 +29,7 @@ impl Project {
 				let sources = accounting_period.to_sources(&dir);
 				AccountingPeriod {
 					name: accounting_period.name,
+					is_initial: accounting_period.is_initial.unwrap_or(false),
 					previous_period: accounting_period.previous_period,
 					sources,
 					payouts: accounting_period.payouts,
@@ -145,10 +146,17 @@ impl Project {
 				accounting_period.name != "Initial",
 				"Accounting periods cannot be named \"Initial\"",
 			);
+			ensure!(
+				accounting_period.is_initial == accounting_period.previous_period.is_none(),
+				"Accounting period \"{}\" is_initial is {}, but previous_period is {:?}",
+				accounting_period.name,
+				accounting_period.is_initial,
+				accounting_period.previous_period,
+			);
 			if let Some(next_accounting_period) = accounting_periods_iter.peek() {
 				ensure!(
-					next_accounting_period.previous_period == accounting_period.name,
-					"Accounting period \"{}\" has previous_period \"{}\", but previous is named \"{}\"",
+					next_accounting_period.previous_period == Some(accounting_period.name.clone()),
+					"Accounting period \"{}\" has previous_period \"{:?}\", but previous is named \"{}\"",
 					next_accounting_period.name,
 					next_accounting_period.previous_period,
 					accounting_period.name,
@@ -200,13 +208,16 @@ impl Project {
 		let period = self.get_accounting_period(&result.name).unwrap();
 		match self.data.accounting_period_results.last() {
 			Some(last_result) => {
-				if last_result.name != period.previous_period {
+				if Some(last_result.name.clone()) != period.previous_period {
 					bail!("Last result not previous_period. Maybe this was already generated?");
 				}
 			}
 			None => {
-				if period.previous_period != "Initial" {
-					panic!("No results exist, yet previous_period != Initial");
+				if period.previous_period.is_some() {
+					panic!(
+						"No results exist, yet previous_period == {:?}",
+						period.previous_period
+					);
 				}
 			}
 		}
@@ -229,7 +240,8 @@ impl Project {
 
 pub struct AccountingPeriod {
 	pub name: String,
-	pub previous_period: String,
+	pub previous_period: Option<String>,
+	pub is_initial: bool,
 	pub recoupments: Vec<Recoupment>,
 	pub payouts: Vec<Payout>,
 	sources: Vec<Source>,
