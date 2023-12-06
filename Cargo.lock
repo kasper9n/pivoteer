@@ -264,6 +264,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "deser-hjson"
+version = "2.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d94aac4095c08ded7e4b9ba7fc2b2929f11b94bb96897ca188b0f64e01688e1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -349,15 +358,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cee9c64da59eae3b50095c18d3e74f8b73c0b86d2792824ff01bbce68ba229ca"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "jsonc-parser"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7725c320caac8c21d8228c1d055af27a995d371f78cc763073d3e068323641b5"
-dependencies = [
- "serde_json",
 ]
 
 [[package]]
@@ -478,8 +478,8 @@ dependencies = [
  "csv",
  "csv-core",
  "csv-pipeline",
+ "deser-hjson",
  "dirs-next",
- "jsonc-parser",
  "maplit",
  "numeric-sort",
  "pretty_assertions",

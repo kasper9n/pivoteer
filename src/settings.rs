@@ -1,6 +1,6 @@
 use crate::sources::{Source, SourceKind};
 use bigdecimal::BigDecimal;
-use jsonc_parser::{parse_to_serde_value, ParseOptions};
+use deser_hjson;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -16,19 +16,12 @@ pub struct Settings {
 }
 impl Settings {
 	pub fn from_path(file_path: PathBuf) -> Self {
-		let settings_str = fs::read_to_string(&file_path).unwrap();
-		let result = parse_to_serde_value(
-			&settings_str,
-			&ParseOptions {
-				allow_comments: true,
-				allow_loose_object_property_names: false,
-				allow_trailing_commas: true,
-			},
-		)
-		.unwrap()
-		.unwrap();
-		prohibit_number_values(&result);
-		serde_json::from_value(result).unwrap()
+		let file_str = fs::read_to_string(&file_path).unwrap();
+
+		let value: serde_json::Value = serde_json::from_str(&file_str).unwrap();
+		prohibit_number_values(&value);
+
+		deser_hjson::from_str(&file_str).unwrap()
 	}
 }
 
