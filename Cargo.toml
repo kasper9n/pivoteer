@@ -14,12 +14,13 @@ regex = "1.9"
 csv-core = "0.1"
 rayon = "1.7"
 anyhow = "1.0"
-jsonc-parser = { version = "0.23", features = ["serde"] }
 clap = { version = "4.3", features = ["derive"] }
 maplit = "1.0"
 dirs-next = "2.0"
 pretty_assertions = "1.4"
 numeric-sort = "0.1"
+# deser_hjson shows error line/column numbers. other hjson/jsonc crates don't
+deser-hjson = "2.2"
 
 [profile.dev]
 opt-level = 1
