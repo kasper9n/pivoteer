@@ -27,7 +27,28 @@ impl Settings {
 		)
 		.unwrap()
 		.unwrap();
+		prohibit_number_values(&result);
 		serde_json::from_value(result).unwrap()
+	}
+}
+
+fn prohibit_number_values(value: &serde_json::Value) {
+	match value {
+		serde_json::Value::Number(_) => {
+			// https://github.com/akubera/bigdecimal-rs/issues/113
+			panic!("Number values are not allowed because they cause precision loss")
+		}
+		serde_json::Value::Object(map) => {
+			for (_, value) in map {
+				prohibit_number_values(value);
+			}
+		}
+		serde_json::Value::Array(array) => {
+			for value in array {
+				prohibit_number_values(value);
+			}
+		}
+		serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::String(_) => {}
 	}
 }
 

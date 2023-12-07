@@ -5,8 +5,7 @@ edition = "2021"
 
 [dependencies]
 csv = "1.2"
-# bigdecimal v0.4 bug: https://github.com/akubera/bigdecimal-rs/issues/113
-bigdecimal = { version = "0.3", features = ["serde"] }
+bigdecimal = { version = "0.4", features = ["serde"] }
 chrono = "0.4"
 csv-pipeline = "0.4"
 serde = { version = "1.0", features = ["derive"] }
@@ -15,7 +14,7 @@ regex = "1.9"
 csv-core = "0.1"
 rayon = "1.7"
 anyhow = "1.0"
-jsonc-parser = { version = "0.22", features = ["serde"] }
+jsonc-parser = { version = "0.23", features = ["serde"] }
 clap = { version = "4.3", features = ["derive"] }
 maplit = "1.0"
 dirs-next = "2.0"
