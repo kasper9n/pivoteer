@@ -25,8 +25,8 @@ impl Source {
 			SourceKind::Landr => landr(&self.file_path),
 			SourceKind::Pretzel | SourceKind::PretzelOldSystem => pretzel(&self.file_path),
 			SourceKind::RepostNetwork => repost_network(&self.file_path),
-			SourceKind::Symphonic => symphonic(&self.file_path),
 			SourceKind::Stem => stem(&self.file_path),
+			SourceKind::Symphonic => symphonic(&self.file_path),
 		}
 	}
 }
@@ -37,20 +37,20 @@ pub enum SourceKind {
 	Landr,
 	Pretzel,
 	PretzelOldSystem,
+	RepostNetwork,
 	Stem,
 	Symphonic,
-	RepostNetwork,
 }
 impl SourceKind {
 	pub fn from_str(platform_str: &str) -> Self {
 		match platform_str {
 			"bandcamp" => SourceKind::Bandcamp,
 			"landr" => SourceKind::Landr,
-			"pretzel" => SourceKind::Pretzel,
 			"pretzel_old_system" => SourceKind::PretzelOldSystem,
+			"pretzel" => SourceKind::Pretzel,
+			"repost_network" => SourceKind::RepostNetwork,
 			"stem" => SourceKind::Stem,
 			"symphonic" => SourceKind::Symphonic,
-			"repost_network" => SourceKind::RepostNetwork,
 			_ => panic!("Unknown platform: {}", platform_str),
 		}
 	}
