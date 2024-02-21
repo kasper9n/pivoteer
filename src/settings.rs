@@ -52,7 +52,7 @@ pub struct AccountingPeriodInfo {
 	pub is_initial: Option<bool>,
 	pub recoupments: Vec<Recoupment>,
 	#[serde(flatten)]
-	pub sources_by_platform: HashMap<String, Vec<String>>,
+	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodInfoSource>>,
 }
 impl AccountingPeriodInfo {
 	pub fn to_sources(&self, dir: &PathBuf) -> Vec<Source> {
@@ -62,15 +62,26 @@ impl AccountingPeriodInfo {
 				let kind = SourceKind::from_str(platform);
 				let sources = file_paths
 					.into_iter()
-					.map(|file_path| {
-						let file_path = PathBuf::from(dir).join(file_path);
-						if !Path::exists(&file_path) {
+					.map(|source_info| {
+						let source = match source_info {
+							AccountingPeriodInfoSource::Path(file_path) => Source {
+								file_path: PathBuf::from(dir).join(file_path),
+								kind,
+								eur_usd_rate: None,
+							},
+							AccountingPeriodInfoSource::FullSource(source_info) => Source {
+								file_path: PathBuf::from(dir).join(&source_info.path),
+								kind,
+								eur_usd_rate: source_info.eur_usd_rate.clone(),
+							},
+						};
+						if !Path::exists(&source.file_path) {
 							panic!(
 								"File not found: {:?}. From {} {}",
-								file_path, self.name, platform
+								source.file_path, self.name, platform
 							);
 						}
-						Source { file_path, kind }
+						source
 					})
 					.collect::<Vec<_>>();
 				sources
@@ -78,6 +89,19 @@ impl AccountingPeriodInfo {
 			.flatten()
 			.collect()
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AccountingPeriodInfoSource {
+	Path(String),
+	FullSource(SourceInfo),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SourceInfo {
+	path: String,
+	eur_usd_rate: Option<BigDecimal>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

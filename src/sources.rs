@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{Datelike, NaiveDate};
 use csv_pipeline::{Error, Pipeline};
 use regex::Regex;
@@ -17,11 +18,13 @@ pub fn parse_date(s: &str, fmt: &str) -> Result<NaiveDate, chrono::ParseError> {
 pub struct Source {
 	pub file_path: PathBuf,
 	pub kind: SourceKind,
+	pub eur_usd_rate: Option<BigDecimal>,
 }
 impl Source {
 	pub fn process_source(&self) -> Pipeline {
 		match &self.kind {
 			SourceKind::Bandcamp => bandcamp(&self.file_path),
+			SourceKind::CurveRoyaltySystems => curve(&self),
 			SourceKind::Landr => landr(&self.file_path),
 			SourceKind::Pretzel | SourceKind::PretzelOldSystem => pretzel(&self.file_path),
 			SourceKind::RepostNetwork => repost_network(&self.file_path),
@@ -34,6 +37,7 @@ impl Source {
 #[derive(Copy, Clone)]
 pub enum SourceKind {
 	Bandcamp,
+	CurveRoyaltySystems,
 	Landr,
 	Pretzel,
 	PretzelOldSystem,
@@ -45,6 +49,7 @@ impl SourceKind {
 	pub fn from_str(platform_str: &str) -> Self {
 		match platform_str {
 			"bandcamp" => SourceKind::Bandcamp,
+			"frequency" => SourceKind::CurveRoyaltySystems,
 			"landr" => SourceKind::Landr,
 			"pretzel_old_system" => SourceKind::PretzelOldSystem,
 			"pretzel" => SourceKind::Pretzel,
@@ -84,6 +89,167 @@ fn bandcamp(file_path: &PathBuf) -> Pipeline {
 			"Units",
 			"Gross Royalties",
 		])
+}
+
+fn curve(source: &Source) -> Pipeline {
+	Pipeline::from_path(&source.file_path)
+		.unwrap()
+		// These are probably ok, but handle them later
+		.validate_col("Type", |value| match value {
+			"Track" => Ok(()),
+			value => Err(Error::InvalidField(value.to_string())),
+		})
+		.validate_col("Release Version", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Release Version: {value}"
+			))),
+		})
+		.validate_col("Release Label", |value| match value {
+			"" | "Frequency Music" | "Frequency Music / Lacuna Media" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Release Label: {value}"
+			))),
+		})
+		.validate_col("PPD", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!("Unxpected PPD: {value}"))),
+		})
+		.validate_col("Track Version", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Track Version: {value}"
+			))),
+		})
+		.validate_col("Distribution Channel", |value| match value {
+			"Digital" | "Neighbouring Rights" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Distribution Channel: {value}"
+			))),
+		})
+		.validate_col("Price Category", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Price Category: {value}"
+			))),
+		})
+		.validate_col("Calculation Type", |value| match value {
+			"Net Receipts" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Calculation Type: {value}"
+			))),
+		})
+		.validate_col("Mechanical Deduction Type", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Mechanical Deduction Type: {value}"
+			))),
+		})
+		.validate_col("Mechanical Deduction Rate", |value| match value {
+			"100" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Mechanical Deduction Rate: {value}"
+			))),
+		})
+		.validate_col("Mechanical Deduction", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Mechanical Deduction: {value}"
+			))),
+		})
+		.validate_col("Deduction Unit Rate", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Deduction Unit Rate: {value}"
+			))),
+		})
+		.validate_col("Deduction Rate", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Deduction Rate: {value}"
+			))),
+		})
+		.validate_col("Deduction", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!("Unxpected Deduction: {value}"))),
+		})
+		.validate_col("Unit Rate", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!("Unxpected Unit Rate: {value}"))),
+		})
+		.validate_col("Multiplier", |value| match value {
+			"1" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Multiplier: {value}"
+			))),
+		})
+		.validate_col("Reduction Rate", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Reduction Rate: {value}"
+			))),
+		})
+		.validate_col("Reserve Rate", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Reserve Rate: {value}"
+			))),
+		})
+		.validate_col("Reserve", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!("Unxpected Reserve: {value}"))),
+		})
+		.validate_col("Specific Withholding Tax Rate", |value| match value {
+			"" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Specific Withholding Tax Rate: {value}"
+			))),
+		})
+		.validate_col("Specific Withholding Tax", |value| match value {
+			"0" => Ok(()),
+			value => Err(Error::InvalidField(format!(
+				"Unxpected Specific Withholding Tax: {value}"
+			))),
+		})
+		.filter_col("Participation Rate", |participation_rate| {
+			participation_rate == "100"
+		})
+		.add_col("Reporting Period", |headers, row| {
+			// This isn't actually the reporting period, just the date when the sale was settled
+			let transaction_date_s = headers.get_field(&row, "Transaction Date").unwrap();
+			let transaction_date = parse_date(transaction_date_s, "%Y-%m-%d");
+			Ok(reporting_period_of(&transaction_date.unwrap()))
+		})
+		.rename_col("Barcode", "UPC")
+		.rename_col("Source", "Store")
+		.rename_col("Configuration", "Store service")
+		.add_col("Gross Royalties", |headers, row| {
+			let currency = headers.get_field(&row, "Currency").unwrap();
+			if currency != "EUR" {
+				return Err(Error::InvalidField(format!(
+					"Unxpected currency {currency}"
+				)));
+			}
+			let net_payable_eur_str = headers.get_field(&row, "Net Payable").unwrap();
+			let net_payable_eur = net_payable_eur_str.parse::<BigDecimal>().unwrap();
+			let net_payable_usd = net_payable_eur * source.eur_usd_rate.as_ref().unwrap();
+
+			Ok(net_payable_usd.to_string())
+		})
+		.select(vec![
+			"Reporting Period",
+			"UPC",
+			"ISRC",
+			"Store",
+			"Store service",
+			"Units",
+			"Net Payable",
+			"Gross Royalties",
+		])
+		.flush(csv_pipeline::Target::path(format!(
+			"/Users/k/Downloads/curve parsed {}.csv",
+			source.file_path.file_name().unwrap().to_string_lossy()
+		)))
 }
 
 fn landr(file_path: &PathBuf) -> Pipeline {
