@@ -193,6 +193,7 @@ impl AccountingResult {
 
 		for track_statement in track_statements.values() {
 			let track = project.get_track(&track_statement.isrc).unwrap();
+			let artists_share = BigDecimal::from(100) - &track.label_share;
 			for split in &track.splits {
 				let artist_statement =
 					artist_statements
@@ -203,9 +204,11 @@ impl AccountingResult {
 								tracks: vec![],
 							};
 						});
+				let total_artist_split =
+					pct_to_factor(&artists_share) * pct_to_factor(&split.share);
 				let artist_track_statement = ArtistTrackStatement {
 					isrc: track_statement.isrc.clone(),
-					net_royalties: track_statement.payable() * pct_to_factor(&split.share),
+					net_royalties: track_statement.payable() * total_artist_split,
 				};
 				if artist_track_statement.net_royalties.is_positive() {
 					artist_statement.net_royalties += artist_track_statement.net_royalties.clone();

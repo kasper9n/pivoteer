@@ -122,12 +122,12 @@ impl Project {
 				.map(|split| split.share.clone())
 				.reduce(|acc, share| acc + share)
 				.unwrap_or(BigDecimal::from(0));
-			let summed_shares = track.label_share.clone() + summed_artist_shares;
-			if summed_shares != BigDecimal::from(100) {
+			let is_full_label_share = summed_artist_shares == BigDecimal::from(0)
+				&& track.label_share == BigDecimal::from(100);
+			if summed_artist_shares != BigDecimal::from(100) && !is_full_label_share {
 				bail!(
-					"Track {} splits don't add up. The splits are:\nLabel split: {}\nArtist splits: {:#?}",
+					"Track \"{}\" splits don't add up: {:#?}",
 					track.title,
-					track.label_share,
 					track.splits
 				);
 			}
