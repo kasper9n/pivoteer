@@ -164,8 +164,9 @@ impl Project {
 
 			for recoupment in &accounting_period.recoupments {
 				ensure!(
-					!recoupment.expense.is_negative() && !recoupment.recoup.is_negative(),
-					"Recoupment must be positive: {:?}",
+					!recoupment.expense.is_negative() && !recoupment.recoup.is_negative()
+						|| recoupment.note.is_some(),
+					"Negative recoupment must have a note: {:?}",
 					recoupment
 				);
 				ensure!(
@@ -285,6 +286,7 @@ impl AccountingPeriod {
 						expense: BigDecimal::from(0),
 						recoup: BigDecimal::from(0),
 						name: recoupment.name.clone(),
+						note: None,
 					});
 			track_recoupment.expense += recoupment.expense.clone();
 			track_recoupment.recoup += recoupment.recoup.clone();
