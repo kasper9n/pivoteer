@@ -102,6 +102,7 @@ pub enum AccountingPeriodInfoSource {
 pub struct SourceInfo {
 	path: String,
 	eur_usd_rate: Option<BigDecimal>,
+	note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -111,6 +112,7 @@ pub struct Recoupment {
 	pub expense: BigDecimal,
 	pub recoup: BigDecimal,
 	pub name: String,
+	pub note: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -150,5 +152,6 @@ impl Track {
 #[serde(deny_unknown_fields)]
 pub struct Split {
 	pub share: BigDecimal,
+	pub share_composition: Option<BigDecimal>,
 	pub name: String,
 }

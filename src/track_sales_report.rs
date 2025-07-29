@@ -22,7 +22,10 @@ impl TrackSalesReport {
 		for (unmapped_isrc, gross_royalties) in isrc_report_map.clone() {
 			let track = match project.get_track_by_any_isrc(&unmapped_isrc) {
 				Some(val) => val,
-				None => panic!("No track with ISRC {}", unmapped_isrc),
+				None => panic!(
+					"No track with ISRC {}. Was scanning sales report {}",
+					unmapped_isrc, sales_report.accounting_period_name
+				),
 			};
 			let track_report = tracks_map
 				.entry(track.main_isrc.clone())
