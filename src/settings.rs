@@ -152,5 +152,6 @@ impl Track {
 #[serde(deny_unknown_fields)]
 pub struct Split {
 	pub share: BigDecimal,
+	pub share_composition: Option<BigDecimal>,
 	pub name: String,
 }
