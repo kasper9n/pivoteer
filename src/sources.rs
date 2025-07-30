@@ -282,19 +282,32 @@ fn landr(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
+fn parse_pretzel_disbursement(text: &str) -> Result<NaiveDate, Error> {
+	let mut text = text.to_string();
+	if text.contains(" - Sup ") {
+		// Ignore suplemental disbursements suffix, like "Mar 25 - Sup Apr 09 25"
+		text = text.split(" - Sup ").collect::<Vec<_>>()[0].to_string();
+	}
+	let disbursement = match parse_date(&format!("1 {text}"), "%d %b %y") {
+		Ok(date) => date,
+		Err(e) => return Err(Error::InvalidField(e.to_string())),
+	};
+	Ok(disbursement)
+}
+
 fn pretzel(file_path: &PathBuf) -> Pipeline {
 	Pipeline::from_path(file_path)
 		.unwrap()
 		.add_col("Reporting Period", |headers, row| {
-			let disbursement = headers.get_field(&row, "disbursement").unwrap();
-			let disbursement = parse_date(&format!("1 {disbursement}"), "%d %b %y");
-			Ok(reporting_period_of(&disbursement.unwrap()))
+			let disbursement_field = headers.get_field(&row, "disbursement").unwrap();
+			let disbursement = parse_pretzel_disbursement(&disbursement_field)?;
+			Ok(reporting_period_of(&disbursement))
 		})
 		.add_col("UPC", |headers, row| {
 			// UPCs are not always available for reports up to 2020. Pretzel had
 			// an old and new report system in use at once, and the old one lacks UPCs
-			let disbursement = headers.get_field(&row, "disbursement").unwrap();
-			let disbursement = parse_date(&format!("1 {disbursement}"), "%d %b %y").unwrap();
+			let disbursement_field = headers.get_field(&row, "disbursement").unwrap();
+			let disbursement = parse_pretzel_disbursement(&disbursement_field)?;
 			if disbursement.year() <= 2020 {
 				let icpn = headers.get_field(&row, "icpn").unwrap_or_default();
 				return Ok(icpn.to_string());
