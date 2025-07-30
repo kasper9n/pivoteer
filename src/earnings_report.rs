@@ -2,7 +2,7 @@ use crate::project_data::{AccountingResult, ProjectData};
 use crate::settings::{Album, Recoupment, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::{BigDecimal, Signed};
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
@@ -74,7 +74,9 @@ impl Project {
 			}
 		}
 		let data_file_path = dir.join(settings.inernal_data_file);
-		let data = ProjectData::open(&data_file_path).unwrap();
+		let data = ProjectData::open(&data_file_path)
+			.context("Failed to open internal data file")
+			.unwrap();
 		Project {
 			data_file_path,
 			accounting_periods,
@@ -307,13 +309,22 @@ impl AccountingPeriod {
 }
 
 pub fn into_sales_report(pipeline: Pipeline) -> Pipeline {
-	pipeline.transform_into(|| {
-		vec![
-			Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
-			Transformer::new("ISRC").keep_unique(),
-			Transformer::new("UPC").keep_unique(),
-		]
-	})
+	pipeline
+		.map(|headers, row| {
+			let isrc = headers.get_field(&row, "ISRC").unwrap();
+			let upc = headers.get_field(&row, "UPC").unwrap();
+			if isrc == "" && upc == "" {
+				println!("Missing ISRC & UPC: {:?}", row);
+			}
+			Ok(row)
+		})
+		.transform_into(|| {
+			vec![
+				Transformer::new("Gross Royalties").sum(BigDecimal::from(0)),
+				Transformer::new("ISRC").keep_unique(),
+				Transformer::new("UPC").keep_unique(),
+			]
+		})
 }
 
 #[derive(Debug, Deserialize)]
@@ -364,8 +375,8 @@ impl SalesReport {
 			*entry += BigDecimal::from_str(&record.gross_royalties).unwrap();
 		} else {
 			println!(
-				"Missing UPC & ISRC in row with gross royalties of {}",
-				record.gross_royalties
+				"Missing UPC & ISRC in row with gross royalties of {}. Row UPC \"{}\", ISRC \"{}\"",
+				record.gross_royalties, record.upc, record.isrc
 			);
 		}
 	}

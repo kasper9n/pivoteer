@@ -4,13 +4,16 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct TrackSalesReportRow {
+	#[allow(unused)]
 	pub isrc: String,
+	#[allow(unused)]
 	pub title: String,
 	pub gross_royalties: BigDecimal,
 }
 #[derive(Debug)]
 pub struct TrackSalesReport {
 	pub tracks: HashMap<String, TrackSalesReportRow>,
+	#[allow(unused)]
 	pub accounting_period_name: String,
 }
 

@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 pub trait SumOrKeepTransform {
 	/// Sum the values from this column, unless the value equals `keep`
+	#[allow(unused)]
 	fn sum_but_keep<'a, N>(self, init: N, keep: &str) -> Box<dyn Transform + 'a>
 	where
 		N: Display + AddAssign + FromStr + Clone + 'a;
