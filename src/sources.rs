@@ -246,10 +246,6 @@ fn curve(source: &Source) -> Pipeline {
 			"Net Payable",
 			"Gross Royalties",
 		])
-		.flush(csv_pipeline::Target::path(format!(
-			"/Users/k/Downloads/curve parsed {}.csv",
-			source.file_path.file_name().unwrap().to_string_lossy()
-		)))
 }
 
 fn landr(file_path: &PathBuf) -> Pipeline {
