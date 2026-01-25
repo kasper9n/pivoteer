@@ -1,5 +1,5 @@
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::settings::{Album, Recoupment, Settings, Track};
+use crate::settings::{Album, RecoupableExpense, Settings, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
@@ -238,7 +238,7 @@ pub struct AccountingPeriod {
 	pub name: String,
 	pub previous_period: Option<String>,
 	pub is_initial: bool,
-	pub recoupments: Vec<Recoupment>,
+	pub recoupments: Vec<RecoupableExpense>,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
@@ -267,7 +267,7 @@ impl AccountingPeriod {
 	pub fn generate_result(&self, project: &Project) -> Result<AccountingResult> {
 		AccountingResult::generate(self, project)
 	}
-	pub fn map_recoupments(&self, project: &Project) -> Result<HashMap<String, Recoupment>> {
+	pub fn map_recoupments(&self, project: &Project) -> Result<HashMap<String, RecoupableExpense>> {
 		let mut track_recoupments = HashMap::new();
 		for recoupment in &self.recoupments {
 			let track = match project.get_track(&recoupment.isrc) {
@@ -283,7 +283,7 @@ impl AccountingPeriod {
 			let track_recoupment =
 				track_recoupments
 					.entry(track.main_isrc.clone())
-					.or_insert(Recoupment {
+					.or_insert(RecoupableExpense {
 						isrc: recoupment.isrc.clone(),
 						date: recoupment.date.clone(),
 						expense: BigDecimal::from(0),

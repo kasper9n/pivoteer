@@ -50,7 +50,7 @@ pub struct AccountingPeriodInfo {
 	pub name: String,
 	pub previous_period: Option<String>,
 	pub is_initial: Option<bool>,
-	pub recoupments: Vec<Recoupment>,
+	pub recoupments: Vec<RecoupableExpense>,
 	#[serde(flatten)]
 	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodInfoSource>>,
 }
@@ -106,7 +106,7 @@ pub struct SourceInfo {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Recoupment {
+pub struct RecoupableExpense {
 	pub isrc: String,
 	pub date: String,
 	pub expense: BigDecimal,
