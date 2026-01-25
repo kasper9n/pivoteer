@@ -1,41 +1,41 @@
 {
-  "inernal_data_file": "Internal data empty.json",
-  "accounting_periods": [
+	"inernal_data_file": "Internal data empty.json",
+	"accounting_periods": [
 		{
-      "name": "1999 Q1",
-      "is_initial": true,
+			"name": "1999 Q1",
+			"is_initial": true,
 			"landr": ["1-landr.csv"],
 			"recoupments": [
-        { "isrc": "B", "date": "1999-01-01", "expense": "20", "recoup": "6", "name": "Salvatore Ganacci - Take Me To America", "note": "Example" }
+				{ "isrc": "B", "date": "1999-01-01", "expense": "20", "recoup": "6", "name": "Salvatore Ganacci - Take Me To America", "note": "Example" }
 			]
 		},
 		{
-      "name": "1999 Q2",
-      "previous_period": "1999 Q1",
+			"name": "1999 Q2",
+			"previous_period": "1999 Q1",
 			"recoupments": []
 		}
 	],
 	"albums": [],
 	"tracks": [
 		{
-      "isrc": "A",
-      "single_upcs": [],
-      "title": "Salvatore Ganacci - Fight Dirty",
-      "max_recoup": "0",
-      "expenses": "0",
-      "recoup": "0",
-      "label_share": "50",
-      "splits": [{ "name": "Salvatore Ganacci", "share": "100" }]
-    },
+			"isrc": "A",
+			"single_upcs": [],
+			"title": "Salvatore Ganacci - Fight Dirty",
+			"max_recoup": "0",
+			"expenses": "0",
+			"recoup": "0",
+			"label_share": "50",
+			"splits": [{ "name": "Salvatore Ganacci", "share": "100" }]
+		},
 		{
-      "isrc": "B",
-      "single_upcs": [],
-      "title": "Salvatore Ganacci - Take Me To America",
-      "max_recoup": "6",
-      "expenses": "0",
-      "recoup": "0",
-      "label_share": "50",
-      "splits": [{ "name": "Salvatore Ganacci", "share": "100" }]
-    }
+			"isrc": "B",
+			"single_upcs": [],
+			"title": "Salvatore Ganacci - Take Me To America",
+			"max_recoup": "6",
+			"expenses": "0",
+			"recoup": "0",
+			"label_share": "50",
+			"splits": [{ "name": "Salvatore Ganacci", "share": "100" }]
+		}
 	]
 }

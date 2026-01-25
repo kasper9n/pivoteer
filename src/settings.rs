@@ -132,8 +132,10 @@ pub struct Track {
 	pub single_upcs: Vec<String>,
 	pub title: String,
 	pub max_recoup: BigDecimal,
-	pub expenses: BigDecimal,
-	pub recoup: BigDecimal,
+	#[serde(default)]
+	pub expenses: Option<BigDecimal>,
+	#[serde(default)]
+	pub recoup: Option<BigDecimal>,
 	pub label_share: BigDecimal,
 	pub splits: Vec<Split>,
 }
