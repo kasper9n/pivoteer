@@ -6,15 +6,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Setup {
+pub struct Manifest {
 	pub inernal_data_file: String,
-	pub accounting_periods: Vec<AccountingPeriodSetup>,
-	pub tracks: Vec<Track>,
-	pub albums: Vec<Album>,
+	pub accounting_periods: Vec<AccountingPeriodManifest>,
+	pub catalog: Vec<CatalogItem>,
 }
-impl Setup {
+impl Manifest {
 	pub fn from_path(file_path: PathBuf) -> Self {
 		let file_str = fs::read_to_string(&file_path).unwrap();
 
@@ -45,14 +44,14 @@ fn prohibit_number_values(value: &serde_json::Value) {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct AccountingPeriodSetup {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AccountingPeriodManifest {
 	pub name: String,
 	pub is_initial: Option<bool>,
 	#[serde(flatten)]
-	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodSetupSource>>,
+	pub sources_by_platform: HashMap<String, Vec<SourceManifest>>,
 }
-impl AccountingPeriodSetup {
+impl AccountingPeriodManifest {
 	pub fn to_sources(&self, dir: &PathBuf) -> Vec<Source> {
 		self.sources_by_platform
 			.iter()
@@ -62,12 +61,12 @@ impl AccountingPeriodSetup {
 					.into_iter()
 					.map(|source_info| {
 						let source = match source_info {
-							AccountingPeriodSetupSource::Path(file_path) => Source {
+							SourceManifest::Path(file_path) => Source {
 								file_path: PathBuf::from(dir).join(file_path),
 								kind,
 								eur_usd_rate: None,
 							},
-							AccountingPeriodSetupSource::FullSource(source_info) => Source {
+							SourceManifest::FullSource(source_info) => Source {
 								file_path: PathBuf::from(dir).join(&source_info.path),
 								kind,
 								eur_usd_rate: source_info.eur_usd_rate.clone(),
@@ -89,29 +88,45 @@ impl AccountingPeriodSetup {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
-pub enum AccountingPeriodSetupSource {
+pub enum SourceManifest {
 	Path(String),
-	FullSource(SourceSetup),
+	FullSource(SourceDetailsManifest),
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct SourceSetup {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SourceDetailsManifest {
 	path: String,
 	eur_usd_rate: Option<BigDecimal>,
 	note: Option<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Album {
-	pub upc: String,
-	pub title: String,
-	pub isrcs: Vec<String>,
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum CatalogItem {
+	Album(Album),
+	Track(Track),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct Album {
+	pub upc: Option<String>,
+	pub title: Option<String>,
+	pub tracks: Vec<AlbumTrack>,
+	#[serde(flatten)]
+	pub recoupment: Option<RecoupmentManifest>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum AlbumTrack {
+	Isrc(String),
+	Track(Track),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Track {
 	#[serde(rename = "isrc")]
@@ -123,7 +138,7 @@ pub struct Track {
 	pub splits: Vec<Split>,
 	pub max_recoup: BigDecimal,
 	#[serde(flatten)]
-	pub recoupment_setup: Option<TrackRecoupmentSetup>,
+	pub recoupment: Option<RecoupmentManifest>,
 }
 impl Track {
 	pub fn isrcs(&self) -> Vec<String> {
@@ -140,7 +155,7 @@ impl Track {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct TrackRecoupmentSetup {
+pub struct RecoupmentManifest {
 	pub expenses: BigDecimal,
 	pub recoup: BigDecimal,
 	pub recoupments: Vec<RecoupableCost>,

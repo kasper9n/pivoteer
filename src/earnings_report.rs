@@ -1,5 +1,5 @@
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::settings::{Album, Setup, Track, TrackRecoupmentSetup};
+use crate::settings::{Album, RecoupmentSetup, Setup, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
@@ -21,8 +21,8 @@ pub struct Project {
 	albums: HashMap<String, Album>,
 }
 impl Project {
-	fn new(dir: PathBuf, settings: Setup) -> Self {
-		let accounting_periods = settings
+	fn new(dir: PathBuf, setup: Setup) -> Self {
+		let accounting_periods = setup
 			.accounting_periods
 			.into_iter()
 			.map(|accounting_period| {
@@ -36,7 +36,7 @@ impl Project {
 			.collect();
 		let mut album_map = HashMap::new();
 		let mut track_map = HashMap::new();
-		for (i, track) in settings.tracks.iter().enumerate() {
+		for (i, track) in setup.tracks.iter().enumerate() {
 			for isrc in track.isrcs() {
 				let replaced_track = track_map.insert(isrc.clone(), i);
 				if replaced_track.is_some() {
@@ -57,7 +57,7 @@ impl Project {
 				}
 			}
 		}
-		for album in settings.albums {
+		for album in setup.albums {
 			if album.isrcs.is_empty() {
 				panic!("Empty album {}", album.upc);
 			}
@@ -71,7 +71,7 @@ impl Project {
 				}
 			}
 		}
-		let data_file_path = dir.join(settings.inernal_data_file);
+		let data_file_path = dir.join(setup.inernal_data_file);
 		let data = ProjectData::open(&data_file_path)
 			.context("Failed to open internal data file")
 			.unwrap();
@@ -79,7 +79,7 @@ impl Project {
 			data_file_path,
 			accounting_periods,
 			data,
-			tracks: settings.tracks,
+			tracks: setup.tracks,
 			isrcs: track_map,
 			albums: album_map,
 		}
@@ -132,7 +132,7 @@ impl Project {
 				);
 			}
 
-			let recoupment_setup = match &track.recoupment_setup {
+			let recoupment_setup = match &track.recoupment {
 				Some(track_recoupment) => track_recoupment,
 				None => continue,
 			};
@@ -284,7 +284,7 @@ impl AccountingPeriod {
 	pub fn recoupments_by_track(
 		&self,
 		project: &Project,
-	) -> Result<HashMap<String, TrackRecoupmentSetup>> {
+	) -> Result<HashMap<String, RecoupmentSetup>> {
 		let mut track_recoupments = HashMap::new();
 		for recoupment in &self.recoupments {
 			let track = match project.get_track(&recoupment.isrc) {
@@ -300,7 +300,7 @@ impl AccountingPeriod {
 			let track_recoupment =
 				track_recoupments
 					.entry(track.main_isrc.clone())
-					.or_insert(TrackRecoupmentSetup {
+					.or_insert(RecoupmentSetup {
 						isrc: recoupment.isrc.clone(),
 						upc: recoupment.upc.clone(),
 						date: recoupment.date.clone(),
