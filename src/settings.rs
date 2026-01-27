@@ -105,7 +105,7 @@ pub struct SourceInfo {
 	note: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Recoupment {
 	pub isrc: String,
 	pub date: String,

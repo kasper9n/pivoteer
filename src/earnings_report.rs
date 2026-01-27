@@ -233,6 +233,7 @@ impl Project {
 	}
 }
 
+#[derive(Clone)]
 pub struct AccountingPeriod {
 	pub name: String,
 	pub previous_period: Option<String>,

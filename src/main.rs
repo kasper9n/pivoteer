@@ -23,6 +23,8 @@ struct Cli {
 enum Commands {
 	/// Generate results for an accounting period
 	Generate(Generate),
+	/// Generate results for all accounting periods up to the specified one
+	GenerateUpTo(GenerateUpTo),
 	/// Export already-generated accounting results
 	Export(Export),
 }
@@ -30,6 +32,15 @@ enum Commands {
 #[derive(Args)]
 struct Generate {
 	/// Accounting period to generate results for
+	accounting_period_name: String,
+	/// Save accounting period results
+	#[arg(long)]
+	save: bool,
+}
+
+#[derive(Args)]
+struct GenerateUpTo {
+	/// Accounting period to generate results up to
 	accounting_period_name: String,
 	/// Save accounting period results
 	#[arg(long)]
@@ -59,6 +70,26 @@ fn main() -> Result<()> {
 				project.add_and_save_result(accounting_result)?;
 			} else {
 				println!("Finished! Re-run with --save it all seems good");
+			}
+		}
+		Commands::GenerateUpTo(args) => {
+			let periods = project.accounting_periods.clone();
+			for accounting_period in periods {
+				let end_now = accounting_period.name == args.accounting_period_name;
+				let accounting_period = project
+					.get_accounting_period(&accounting_period.name)
+					.context("Accounting period from argument not found")?;
+				let accounting_result = accounting_period.generate_result(&project)?;
+
+				if args.save {
+					project.add_and_save_result(accounting_result)?;
+				} else {
+					println!("Finished! Re-run with --save it all seems good");
+				}
+
+				if end_now {
+					break;
+				}
 			}
 		}
 
