@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Settings {
+pub struct Setup {
 	pub inernal_data_file: String,
-	pub accounting_periods: Vec<AccountingPeriodInfo>,
+	pub accounting_periods: Vec<AccountingPeriodSetup>,
 	pub tracks: Vec<Track>,
 	pub albums: Vec<Album>,
 }
-impl Settings {
+impl Setup {
 	pub fn from_path(file_path: PathBuf) -> Self {
 		let file_str = fs::read_to_string(&file_path).unwrap();
 
@@ -45,16 +45,60 @@ fn prohibit_number_values(value: &serde_json::Value) {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct AccountingPeriodInfo {
-	pub name: String,
-	pub previous_period: Option<String>,
-	pub is_initial: Option<bool>,
-	pub recoupments: Vec<RecoupableExpense>,
-	#[serde(flatten)]
-	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodInfoSource>>,
+#[derive(Clone, Debug)]
+pub struct YearQuarter {
+	year: u16,
+	quarter: u8,
 }
-impl AccountingPeriodInfo {
+impl YearQuarter {
+	pub fn parse(s: &str) -> Self {
+		let parts = s.split(" ").collect::<Vec<_>>();
+		assert_eq!(parts.len(), 2);
+
+		let value = Self {
+			year: parts[0].parse().unwrap(),
+			quarter: parts[1].parse().unwrap(),
+		};
+		value.assert_valid();
+
+		value
+	}
+	pub fn assert_valid(&self) {
+		assert!((1000..=9999).contains(&self.year));
+		assert!((1..=4).contains(&self.quarter));
+	}
+	pub fn get_prev(&self) -> Self {
+		let mut value = self.clone();
+		if value.quarter == 1 {
+			value.quarter = 4;
+			value.year -= 1;
+		} else {
+			value.quarter -= 1;
+		}
+		value.assert_valid();
+		value
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountingPeriodSetup {
+	pub name: String,
+	pub is_initial: Option<bool>,
+	#[serde(flatten)]
+	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodSetupSource>>,
+}
+impl AccountingPeriodSetup {
+	pub fn year(&self) -> u16 {
+		YearQuarter::parse(&self.name).year
+	}
+	pub fn quarter(&self) -> u8 {
+		YearQuarter::parse(&self.name).quarter
+	}
+	pub fn get_prev_period(&self) -> String {
+		let current = YearQuarter::parse(&self.name);
+		let prev = current.get_prev();
+		format!("{} Q{}", prev.year, prev.quarter)
+	}
 	pub fn to_sources(&self, dir: &PathBuf) -> Vec<Source> {
 		self.sources_by_platform
 			.iter()
@@ -64,12 +108,12 @@ impl AccountingPeriodInfo {
 					.into_iter()
 					.map(|source_info| {
 						let source = match source_info {
-							AccountingPeriodInfoSource::Path(file_path) => Source {
+							AccountingPeriodSetupSource::Path(file_path) => Source {
 								file_path: PathBuf::from(dir).join(file_path),
 								kind,
 								eur_usd_rate: None,
 							},
-							AccountingPeriodInfoSource::FullSource(source_info) => Source {
+							AccountingPeriodSetupSource::FullSource(source_info) => Source {
 								file_path: PathBuf::from(dir).join(&source_info.path),
 								kind,
 								eur_usd_rate: source_info.eur_usd_rate.clone(),
@@ -93,26 +137,16 @@ impl AccountingPeriodInfo {
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum AccountingPeriodInfoSource {
+pub enum AccountingPeriodSetupSource {
 	Path(String),
-	FullSource(SourceInfo),
+	FullSource(SourceSetup),
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SourceInfo {
+pub struct SourceSetup {
 	path: String,
 	eur_usd_rate: Option<BigDecimal>,
 	note: Option<String>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct RecoupableExpense {
-	pub isrc: String,
-	pub date: String,
-	pub expense: BigDecimal,
-	pub recoup: BigDecimal,
-	pub name: String,
-	pub note: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -131,15 +165,12 @@ pub struct Track {
 	pub secondary_isrcs: Option<Vec<String>>,
 	pub single_upcs: Vec<String>,
 	pub title: String,
-	pub max_recoup: BigDecimal,
-	#[serde(default)]
-	pub expenses: Option<BigDecimal>,
-	#[serde(default)]
-	pub recoup: Option<BigDecimal>,
 	pub label_share: BigDecimal,
 	pub splits: Vec<Split>,
+	pub max_recoup: BigDecimal,
+	#[serde(flatten)]
+	pub recoupment_setup: Option<TrackRecoupmentSetup>,
 }
-
 impl Track {
 	pub fn isrcs(&self) -> Vec<String> {
 		let mut isrcs = vec![self.main_isrc.clone()];
@@ -148,6 +179,25 @@ impl Track {
 		}
 		isrcs
 	}
+	// pub fn id(&self) -> String {
+	// 	// 32-bit, alphanumeric without 0OIL
+	// 	// 123456789abcdefghjkmnpqrstuvwxyz
+	// }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TrackRecoupmentSetup {
+	pub expenses: BigDecimal,
+	pub recoup: BigDecimal,
+	pub recoupments: Vec<RecoupableCost>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct RecoupableCost {
+	pub date: String,
+	pub expense: BigDecimal,
+	pub recoup: BigDecimal,
+	pub note: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

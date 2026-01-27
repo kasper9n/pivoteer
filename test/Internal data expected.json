@@ -1,76 +1,37 @@
 {
 	"accounting_period_results": [
 		{
-			"name": "1999 Q1",
-			"previous_name": null,
-			"is_initial": true,
-			"track_statements": {
-				"A": {
-					"isrc": "A",
-					"title": "Salvatore Ganacci - Fight Dirty",
-					"opening_net_amount": "0",
-					"gross_royalties": "20",
-					"new_costs": "0",
-					"net_amount": "20"
-				},
-				"B": {
-					"isrc": "B",
-					"title": "Salvatore Ganacci - Take Me To America",
-					"opening_net_amount": "0",
-					"gross_royalties": "0",
-					"new_costs": "6",
-					"net_amount": "-6"
-				}
-			},
-			"artist_statements": {
-				"Salvatore Ganacci": {
-					"net_royalties": "10.00",
-					"tracks": [
-						{
-							"isrc": "A",
-							"net_royalties": "10.00"
-						},
-						{
-							"isrc": "B",
-							"net_royalties": "-3.00"
-						}
-					]
-				}
-			}
-		},
-		{
 			"name": "1999 Q2",
-			"previous_name": "1999 Q1",
-			"is_initial": false,
+			"is_locked": false,
 			"track_statements": {
+				// Royalties are incomes, so they have positive balances
 				"A": {
-					"isrc": "A",
 					"title": "Salvatore Ganacci - Fight Dirty",
-					"opening_net_amount": "20",
-					"gross_royalties": "0",
-					"new_costs": "0",
-					"net_amount": "20"
-				},
-				"B": {
-					"isrc": "B",
-					"title": "Salvatore Ganacci - Take Me To America",
-					"opening_net_amount": "-6",
-					"gross_royalties": "0",
-					"new_costs": "0",
-					"net_amount": "-6"
+					// opening royalties: 30
+					"new_royalties": "20",
+					"closing_royalties": "50",
+					"new_recouped": "-20",
+					"new_payable_royalties": "0"
 				}
 			},
-			"artist_statements": {
+			"recoupment_accounts": {
+				// Amounts recouped are future incomes, so they have positive balances
+				"upc_1": {
+					// opening balance: 100
+					"new_recoupables": "50",
+					"new_recouped": "-20",
+					"closing_balance": "130"
+				}
+			},
+			"artist_net_royalties": {
+				// Artist balances are debts, so they have negative balances
 				"Salvatore Ganacci": {
-					"net_royalties": "0",
+					// opening_net_royalties: 0
+					"new_net_royalties": "0",
 					"tracks": [
 						{
 							"isrc": "A",
-							"net_royalties": "0.00"
-						},
-						{
-							"isrc": "B",
-							"net_royalties": "-3.00"
+							"net_royalties": "-0.00"
 						}
 					]
 				}
