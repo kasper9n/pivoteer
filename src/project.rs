@@ -1,5 +1,5 @@
+use crate::manifest::{Album, RecoupmentSetup, Setup, Track};
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::settings::{Album, RecoupmentSetup, Setup, Track};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
@@ -84,10 +84,10 @@ impl Project {
 			albums: album_map,
 		}
 	}
-	pub fn load(settings_path: PathBuf) -> Result<Self> {
-		let project_dir = settings_path.parent().unwrap().to_owned();
-		let settings = Setup::from_path(settings_path);
-		Ok(Self::new(project_dir, settings))
+	pub fn load(manifest_path: PathBuf) -> Result<Self> {
+		let project_dir = manifest_path.parent().unwrap().to_owned();
+		let manifest = Setup::from_path(manifest_path);
+		Ok(Self::new(project_dir, manifest))
 	}
 	pub fn verify(&self) -> Result<()> {
 		if !Path::exists(&self.data_file_path) {

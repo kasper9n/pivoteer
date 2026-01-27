@@ -1,4 +1,4 @@
-use crate::earnings_report::{AccountingPeriod, Project};
+use crate::project::{AccountingPeriod, Project};
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
@@ -323,7 +323,7 @@ struct ArtistTrackStatementExport {
 
 #[cfg(test)]
 mod test {
-	use crate::earnings_report::Project;
+	use crate::project::Project;
 	use crate::project_data::ProjectData;
 	use anyhow::Result;
 	use pretty_assertions::assert_eq;
@@ -331,7 +331,7 @@ mod test {
 
 	#[test]
 	fn test_generate_artist_statements() -> Result<()> {
-		let mut project = Project::load(PathBuf::from("test/Settings.jsonc"))?;
+		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"))?;
 
 		let q1_result = project
 			.get_accounting_period("1999 Q1")

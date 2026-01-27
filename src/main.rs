@@ -1,22 +1,20 @@
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-// use earnings_report::Project;
+use project::Project;
 use std::path::PathBuf;
 
-use crate::settings::Manifest;
-
-// mod earnings_report;
-// mod project_data;
-mod settings;
+mod manifest;
+mod project;
+mod project_data;
 mod sources;
-// mod track_sales_report;
-// mod transformers;
+mod track_sales_report;
+mod transformers;
 
 #[derive(Parser)]
 #[command(about, long_about)]
 struct Cli {
-	/// Path to .jsonc settings file
-	settings_path: PathBuf,
+	/// Path to .jsonc manifest file
+	manifest_path: PathBuf,
 	#[command(subcommand)]
 	command: Commands,
 }
@@ -58,11 +56,8 @@ struct Export {
 fn main() -> Result<()> {
 	let args = Cli::parse();
 
-	let manifest = Manifest::from_path(args.settings_path);
-	println!("{:#?}", manifest);
-
-	// let mut project = Project::load(PathBuf::from(args.settings_path))?;
-	// project.verify()?;
+	let mut project = Project::load(PathBuf::from(args.manifest_path))?;
+	project.verify()?;
 
 	// match args.command {
 	// 	Commands::Generate(args) => {

@@ -1,4 +1,4 @@
-use crate::earnings_report::{Project, SalesReport};
+use crate::project::{Project, SalesReport};
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::collections::HashMap;
 
