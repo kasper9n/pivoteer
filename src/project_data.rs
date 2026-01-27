@@ -70,7 +70,6 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 #[serde(deny_unknown_fields)]
 pub struct AccountingResult {
 	pub name: String,
-	pub previous_name: Option<String>,
 	pub is_initial: bool,
 	#[serde(serialize_with = "sorted_map")]
 	track_statements: TrackStatementsMap,
@@ -88,7 +87,6 @@ impl AccountingResult {
 			Self::generate_artist_statements(&track_statements, period, &project)?;
 		Ok(AccountingResult {
 			name: period.name.clone(),
-			previous_name: period.previous_period.clone(),
 			is_initial: period.is_initial,
 			track_statements,
 			artist_statements,
@@ -99,7 +97,7 @@ impl AccountingResult {
 		period: &AccountingPeriod,
 		project: &Project,
 	) -> Result<TrackStatementsMap> {
-		let track_recoupments = period.map_recoupments(project)?;
+		let track_recoupments = period.recoupments_by_track(project)?;
 
 		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.previous_period {
 			Some(previous_period) => {
@@ -136,10 +134,11 @@ impl AccountingResult {
 
 		// Add new costs
 		for track_recoupment in track_recoupments.into_values() {
+			let isrc = track_recoupment.isrc.as_ref().unwrap();
 			let statement = statements
-				.entry(track_recoupment.isrc.clone())
+				.entry(isrc.clone())
 				.or_insert_with(|| TrackStatement {
-					isrc: track_recoupment.isrc,
+					isrc: isrc.clone(),
 					..Default::default()
 				});
 			statement.new_costs = track_recoupment.recoup;
@@ -279,7 +278,6 @@ impl AccountingResult {
 		});
 		Export {
 			name: self.name.clone(),
-			previous_name: self.previous_name.clone().into(),
 			is_initial: self.is_initial,
 			artist_statements,
 		}
@@ -289,7 +287,6 @@ impl AccountingResult {
 #[derive(Serialize)]
 pub struct Export {
 	name: String,
-	previous_name: Option<String>,
 	is_initial: bool,
 	artist_statements: Vec<ArtistStatementExport>,
 }

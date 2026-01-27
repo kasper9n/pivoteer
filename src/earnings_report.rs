@@ -1,5 +1,5 @@
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::settings::{Album, RecoupableExpense, Settings, Track};
+use crate::settings::{Album, Setup, Track, TrackRecoupmentSetup};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
@@ -21,7 +21,7 @@ pub struct Project {
 	albums: HashMap<String, Album>,
 }
 impl Project {
-	fn new(dir: PathBuf, settings: Settings) -> Self {
+	fn new(dir: PathBuf, settings: Setup) -> Self {
 		let accounting_periods = settings
 			.accounting_periods
 			.into_iter()
@@ -30,9 +30,7 @@ impl Project {
 				AccountingPeriod {
 					name: accounting_period.name,
 					is_initial: accounting_period.is_initial.unwrap_or(false),
-					previous_period: accounting_period.previous_period,
 					sources,
-					recoupments: accounting_period.recoupments,
 				}
 			})
 			.collect();
@@ -88,7 +86,7 @@ impl Project {
 	}
 	pub fn load(settings_path: PathBuf) -> Result<Self> {
 		let project_dir = settings_path.parent().unwrap().to_owned();
-		let settings = Settings::from_path(settings_path);
+		let settings = Setup::from_path(settings_path);
 		Ok(Self::new(project_dir, settings))
 	}
 	pub fn verify(&self) -> Result<()> {
@@ -133,6 +131,35 @@ impl Project {
 					track.splits
 				);
 			}
+
+			let recoupment_setup = match &track.recoupment_setup {
+				Some(track_recoupment) => track_recoupment,
+				None => continue,
+			};
+			let mut total_recoup = BigDecimal::from(0);
+			let mut total_expenses = BigDecimal::from(0);
+			for recoupment in &recoupment_setup.recoupments {
+				total_recoup += &recoupment.recoup;
+				total_expenses += &recoupment.expense;
+				ensure!(total_recoup > 0);
+				ensure!(total_expenses > 0);
+				ensure!(
+					recoupment.recoup <= recoupment.expense,
+					"Recouped more than the expense: {:?}",
+					recoupment
+				);
+				ensure!(
+					recoupment.recoup <= track.max_recoup,
+					"Track recoupment exceeds max_group: {}",
+					track.title,
+				);
+				ensure!(
+					recoupment.note.is_some()
+						|| (recoupment.expense.is_positive() && recoupment.recoup.is_positive()),
+					"Negative recoupment must have a note: {:?}",
+					recoupment
+				);
+			}
 		}
 		Ok(())
 	}
@@ -141,40 +168,20 @@ impl Project {
 			bail!("No accounting periods found")
 		}
 
-		let mut accounting_periods_iter = self.accounting_periods.iter().peekable();
-		while let Some(accounting_period) = accounting_periods_iter.next() {
-			ensure!(
-				accounting_period.name != "Initial",
-				"Accounting periods cannot be named \"Initial\"",
-			);
-			ensure!(
-				accounting_period.is_initial == accounting_period.previous_period.is_none(),
-				"Accounting period \"{}\" is_initial is {}, but previous_period is {:?}",
-				accounting_period.name,
-				accounting_period.is_initial,
-				accounting_period.previous_period,
-			);
-			if let Some(next_accounting_period) = accounting_periods_iter.peek() {
+		let mut accounting_periods_iter = self.accounting_periods.iter().enumerate().peekable();
+		while let Some((i, accounting_period)) = accounting_periods_iter.next() {
+			if i == 0 {
 				ensure!(
-					next_accounting_period.previous_period == Some(accounting_period.name.clone()),
-					"Accounting period \"{}\" has previous_period \"{:?}\", but previous is named \"{}\"",
-					next_accounting_period.name,
-					next_accounting_period.previous_period,
-					accounting_period.name,
-				)
-			}
-
-			for recoupment in &accounting_period.recoupments {
-				ensure!(
-					!recoupment.expense.is_negative() && !recoupment.recoup.is_negative()
-						|| recoupment.note.is_some(),
-					"Negative recoupment must have a note: {:?}",
-					recoupment
+					accounting_period.is_initial == true,
+					"First accounting period must have is_initial set to true"
 				);
+			}
+			if let Some((_, next_accounting_period)) = accounting_periods_iter.peek() {
 				ensure!(
-					recoupment.expense >= recoupment.recoup,
-					"Recouped more than the expense: {:?}",
-					recoupment
+					next_accounting_period.prev_period() == accounting_period.name.clone(),
+					"Accounting period \"{}\" has unexpected previous period \"{:?}\"",
+					accounting_period.name,
+					next_accounting_period.prev_period(),
 				)
 			}
 		}
@@ -203,17 +210,15 @@ impl Project {
 		let period = self.get_accounting_period(&result.name).unwrap();
 		match self.data.accounting_period_results.last() {
 			Some(last_result) => {
-				if Some(last_result.name.clone()) != period.previous_period {
+				if last_result.name.clone() != period.prev_period() {
 					bail!("Last result not previous_period. Maybe this was already generated?");
 				}
 			}
 			None => {
-				if period.previous_period.is_some() {
-					panic!(
-						"No results exist, yet previous_period == {:?}",
-						period.previous_period
-					);
-				}
+				ensure!(
+					period.is_initial == true,
+					"No results exist, yet the accounting period does not have is_initial set to true"
+				);
 			}
 		}
 		self.data.accounting_period_results.push(result);
@@ -236,12 +241,21 @@ impl Project {
 #[derive(Clone)]
 pub struct AccountingPeriod {
 	pub name: String,
-	pub previous_period: Option<String>,
 	pub is_initial: bool,
-	pub recoupments: Vec<RecoupableExpense>,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
+	pub fn year(&self) -> u16 {
+		YearQuarter::parse(&self.name).year
+	}
+	pub fn quarter(&self) -> u8 {
+		YearQuarter::parse(&self.name).quarter
+	}
+	pub fn prev_period(&self) -> String {
+		let current = YearQuarter::parse(&self.name);
+		let prev = current.get_prev();
+		format!("{} Q{}", prev.year, prev.quarter)
+	}
 	fn generate_sales_report_csv_str(&self) -> String {
 		let files: Vec<_> = self
 			.sources
@@ -267,7 +281,10 @@ impl AccountingPeriod {
 	pub fn generate_result(&self, project: &Project) -> Result<AccountingResult> {
 		AccountingResult::generate(self, project)
 	}
-	pub fn map_recoupments(&self, project: &Project) -> Result<HashMap<String, RecoupableExpense>> {
+	pub fn recoupments_by_track(
+		&self,
+		project: &Project,
+	) -> Result<HashMap<String, TrackRecoupmentSetup>> {
 		let mut track_recoupments = HashMap::new();
 		for recoupment in &self.recoupments {
 			let track = match project.get_track(&recoupment.isrc) {
@@ -283,8 +300,9 @@ impl AccountingPeriod {
 			let track_recoupment =
 				track_recoupments
 					.entry(track.main_isrc.clone())
-					.or_insert(RecoupableExpense {
+					.or_insert(TrackRecoupmentSetup {
 						isrc: recoupment.isrc.clone(),
+						upc: recoupment.upc.clone(),
 						date: recoupment.date.clone(),
 						expense: BigDecimal::from(0),
 						recoup: BigDecimal::from(0),
@@ -306,6 +324,41 @@ impl AccountingPeriod {
 			);
 		}
 		Ok(track_recoupments)
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct YearQuarter {
+	year: u16,
+	quarter: u8,
+}
+impl YearQuarter {
+	pub fn parse(s: &str) -> Self {
+		let parts = s.split(" ").collect::<Vec<_>>();
+		assert_eq!(parts.len(), 2);
+
+		let value = Self {
+			year: parts[0].parse().unwrap(),
+			quarter: parts[1].parse().unwrap(),
+		};
+		value.assert_valid();
+
+		value
+	}
+	pub fn assert_valid(&self) {
+		assert!((1000..=9999).contains(&self.year));
+		assert!((1..=4).contains(&self.quarter));
+	}
+	pub fn get_prev(&self) -> Self {
+		let mut value = self.clone();
+		if value.quarter == 1 {
+			value.quarter = 4;
+			value.year -= 1;
+		} else {
+			value.quarter -= 1;
+		}
+		value.assert_valid();
+		value
 	}
 }
 

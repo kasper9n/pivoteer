@@ -45,41 +45,6 @@ fn prohibit_number_values(value: &serde_json::Value) {
 	}
 }
 
-#[derive(Clone, Debug)]
-pub struct YearQuarter {
-	year: u16,
-	quarter: u8,
-}
-impl YearQuarter {
-	pub fn parse(s: &str) -> Self {
-		let parts = s.split(" ").collect::<Vec<_>>();
-		assert_eq!(parts.len(), 2);
-
-		let value = Self {
-			year: parts[0].parse().unwrap(),
-			quarter: parts[1].parse().unwrap(),
-		};
-		value.assert_valid();
-
-		value
-	}
-	pub fn assert_valid(&self) {
-		assert!((1000..=9999).contains(&self.year));
-		assert!((1..=4).contains(&self.quarter));
-	}
-	pub fn get_prev(&self) -> Self {
-		let mut value = self.clone();
-		if value.quarter == 1 {
-			value.quarter = 4;
-			value.year -= 1;
-		} else {
-			value.quarter -= 1;
-		}
-		value.assert_valid();
-		value
-	}
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct AccountingPeriodSetup {
 	pub name: String,
@@ -88,17 +53,6 @@ pub struct AccountingPeriodSetup {
 	pub sources_by_platform: HashMap<String, Vec<AccountingPeriodSetupSource>>,
 }
 impl AccountingPeriodSetup {
-	pub fn year(&self) -> u16 {
-		YearQuarter::parse(&self.name).year
-	}
-	pub fn quarter(&self) -> u8 {
-		YearQuarter::parse(&self.name).quarter
-	}
-	pub fn get_prev_period(&self) -> String {
-		let current = YearQuarter::parse(&self.name);
-		let prev = current.get_prev();
-		format!("{} Q{}", prev.year, prev.quarter)
-	}
 	pub fn to_sources(&self, dir: &PathBuf) -> Vec<Source> {
 		self.sources_by_platform
 			.iter()

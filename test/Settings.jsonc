@@ -10,7 +10,18 @@
 			"name": "1999 Q2",
 		},
 	],
-	"albums": [],
+	"albums": [
+		{
+			"upc": "1",
+			"title": "Salvatore Ganacci - Fight Dirty Single",
+			"isrcs": ["A"],
+			"expenses": "0",
+			"recoup": "0",
+			"recoupments": [
+				{ "date": "1999-01-01", "expense": "20", "recoup": "6", "note": "Example" },
+			],
+		},
+	],
 	"tracks": [
 		{
 			"isrc": "A",
