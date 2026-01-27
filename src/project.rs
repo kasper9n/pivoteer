@@ -1,11 +1,12 @@
 use crate::manifest::{
-	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, RecoupmentSetup, Track,
+	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, Track,
 };
 use crate::project_data::{AccountingResult, ProjectData};
-use crate::sources::Source;
+use crate::sources::{parse_date, Source};
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::BigDecimal;
+use chrono::Datelike;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -322,47 +323,63 @@ impl AccountingPeriod {
 	pub fn recoupments_by_track(
 		&self,
 		project: &Project,
-	) -> Result<HashMap<String, RecoupmentSetup>> {
+	) -> Result<HashMap<String, TrackRecoupment>> {
 		let mut track_recoupments = HashMap::new();
-		for recoupment in &self.recoupments {
-			let track = match project.get_track(&recoupment.isrc) {
-				Some(track) => track,
-				None => bail!("Recoupment has a non-existent ISRC {}", recoupment.isrc),
+		let period_year: i32 = self.year().into();
+		let period_quarter: u32 = self.quarter().into();
+
+		for (_, album) in &project.albums {
+			assert!(
+				album.recoupment.is_none(),
+				"Album recoupment not yet supported"
+			);
+		}
+
+		for track in &project.tracks {
+			let track_recoupment = match track_recoupments.entry(track.main_isrc.clone()) {
+				Entry::Occupied(_) => panic!("Duplicate ISRC recoupment {}", track.main_isrc),
+				Entry::Vacant(entry) => entry.insert(TrackRecoupment {
+					isrc: track.main_isrc.clone(),
+					expense: BigDecimal::from(0),
+					recoup: BigDecimal::from(0),
+					name: track.title.clone(),
+					note: None,
+				}),
 			};
-			ensure!(
-				recoupment.name == track.title,
-				"Recoupment track title mismatch:\n{}\n{}",
-				recoupment.name,
-				track.title,
-			);
-			let track_recoupment =
-				track_recoupments
-					.entry(track.main_isrc.clone())
-					.or_insert(RecoupmentSetup {
-						isrc: recoupment.isrc.clone(),
-						upc: recoupment.upc.clone(),
-						date: recoupment.date.clone(),
-						expense: BigDecimal::from(0),
-						recoup: BigDecimal::from(0),
-						name: recoupment.name.clone(),
-						note: None,
-					});
-			track_recoupment.expense += recoupment.expense.clone();
-			track_recoupment.recoup += recoupment.recoup.clone();
-			ensure!(
-				track_recoupment.recoup <= track.max_recoup,
-				"Track recoupment exceeds max_group: {}",
-				track_recoupment.name,
-			);
-			ensure!(
-				track_recoupment.recoup <= track_recoupment.expense,
-				"{} track recoupment exceeds expenses: {}",
-				track_recoupment.date,
-				track_recoupment.name,
-			);
+			if let Some(recoupment_manifest) = &track.recoupment {
+				for recoupment in &recoupment_manifest.recoupments {
+					// Make sure the date is in the accounting period
+					let date = parse_date(&recoupment.date, "%Y-%m-%d").unwrap();
+					let in_year = date.year() == period_year;
+					let in_quarter = date.quarter() == period_quarter;
+					if in_year && in_quarter {
+						track_recoupment.expense += track_recoupment.expense.clone();
+						track_recoupment.recoup += track_recoupment.recoup.clone();
+						ensure!(
+							track_recoupment.recoup <= track.max_recoup,
+							"Track recoupment exceeds max_recoup: {}",
+							track_recoupment.name,
+						);
+						ensure!(
+							track_recoupment.recoup <= track_recoupment.expense,
+							"{} track recoupment exceeds expenses: {}",
+							recoupment.date,
+							track_recoupment.name,
+						);
+					}
+				}
+			}
 		}
 		Ok(track_recoupments)
 	}
+}
+
+pub struct TrackRecoupment {
+	pub isrc: String,
+	expense: BigDecimal,
+	pub recoup: BigDecimal,
+	name: String,
+	note: Option<String>,
 }
 
 #[derive(Clone, Debug)]

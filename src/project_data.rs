@@ -130,11 +130,10 @@ impl AccountingResult {
 
 		// Add new costs
 		for track_recoupment in track_recoupments.into_values() {
-			let isrc = track_recoupment.isrc.as_ref().unwrap();
 			let statement = statements
-				.entry(isrc.clone())
+				.entry(track_recoupment.isrc.clone())
 				.or_insert_with(|| TrackStatement {
-					isrc: isrc.clone(),
+					isrc: track_recoupment.isrc.clone(),
 					..Default::default()
 				});
 			statement.new_costs = track_recoupment.recoup;
