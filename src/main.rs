@@ -59,52 +59,52 @@ fn main() -> Result<()> {
 	let mut project = Project::load(PathBuf::from(args.manifest_path))?;
 	project.verify()?;
 
-	// match args.command {
-	// 	Commands::Generate(args) => {
-	// 		let accounting_period = project
-	// 			.get_accounting_period(&args.accounting_period_name)
-	// 			.context("Accounting period from argument not found")?;
-	// 		let accounting_result = accounting_period.generate_result(&project)?;
+	match args.command {
+		Commands::Generate(args) => {
+			let accounting_period = project
+				.get_accounting_period(&args.accounting_period_name)
+				.context("Accounting period from argument not found")?;
+			let accounting_result = accounting_period.generate_result(&project)?;
 
-	// 		if args.save {
-	// 			project.add_and_save_result(accounting_result)?;
-	// 		} else {
-	// 			println!("Finished! Re-run with --save it all seems good");
-	// 		}
-	// 	}
+			if args.save {
+				project.add_and_save_result(accounting_result)?;
+			} else {
+				println!("Finished! Re-run with --save it all seems good");
+			}
+		}
 
-	// Commands::GenerateUpTo(args) => {
-	// 	let periods = project.accounting_periods.clone();
-	// 	for accounting_period in periods {
-	// 		let end_now = accounting_period.name == args.accounting_period_name;
-	// 		let accounting_period = project
-	// 			.get_accounting_period(&accounting_period.name)
-	// 			.context("Accounting period from argument not found")?;
-	// 		let accounting_result = accounting_period.generate_result(&project)?;
+		Commands::GenerateUpTo(args) => {
+			let periods = project.accounting_periods.clone();
+			for accounting_period in periods {
+				let end_now = accounting_period.name == args.accounting_period_name;
+				let accounting_period = project
+					.get_accounting_period(&accounting_period.name)
+					.context("Accounting period from argument not found")?;
+				let accounting_result = accounting_period.generate_result(&project)?;
 
-	// 		if args.save {
-	// 			project.add_and_save_result(accounting_result)?;
-	// 		} else {
-	// 			println!("Finished! Re-run with --save it all seems good");
-	// 		}
+				if args.save {
+					project.add_and_save_result(accounting_result)?;
+				} else {
+					println!("Finished! Re-run with --save it all seems good");
+				}
 
-	// 		if end_now {
-	// 			break;
-	// 		}
-	// 	}
-	// }
+				if end_now {
+					break;
+				}
+			}
+		}
 
-	// 	Commands::Export(args) => {
-	// 		let result = project
-	// 			.data
-	// 			.get_accounting_result(&args.accounting_period_name)
-	// 			.context("No result")?;
-	// 		let file_name = result.name.to_string() + ".json";
-	// 		let export = result.export();
-	// 		export.save_to_downloads(file_name)?;
-	// 		return Ok(());
-	// 	}
-	// }
+		Commands::Export(args) => {
+			let result = project
+				.data
+				.get_accounting_result(&args.accounting_period_name)
+				.context("No result")?;
+			let file_name = result.name.to_string() + ".json";
+			let export = result.export();
+			export.save_to_downloads(file_name)?;
+			return Ok(());
+		}
+	}
 
 	Ok(())
 }

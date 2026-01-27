@@ -13,7 +13,7 @@
 	"catalog": [
 		{
 			"upc": "1",
-			"title": "Salvatore Ganacci - Fight Dirty Single",
+			"title": "Ganacci Album",
 			"expenses": "0",
 			"recoup": "0",
 			"recoupments": [
@@ -38,26 +38,20 @@
 			],
 		},
 		{
-			"upc": "2",
-			"title": "Salvatore Ganacci - Take Me To America Single",
-			"tracks": [
+			"isrc": "B",
+			"single_upcs": ["2"],
+			"title": "Salvatore Ganacci - Take Me To America",
+			"label_share": "50",
+			"splits": [{ "name": "Salvatore Ganacci", "share": "100" }],
+			"max_recoup": "6",
+			"expenses": "0",
+			"recoup": "0",
+			"recoupments": [
 				{
-					"isrc": "B",
-					"single_upcs": [],
-					"title": "Salvatore Ganacci - Take Me To America",
-					"label_share": "50",
-					"splits": [{ "name": "Salvatore Ganacci", "share": "100" }],
-					"max_recoup": "6",
-					"expenses": "0",
-					"recoup": "0",
-					"recoupments": [
-						{
-							"date": "1999-01-01",
-							"expense": "20",
-							"recoup": "6",
-							"note": "Example",
-						},
-					],
+					"date": "1999-01-01",
+					"expense": "20",
+					"recoup": "6",
+					"note": "Example",
 				},
 			],
 		},

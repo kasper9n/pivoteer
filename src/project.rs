@@ -1,12 +1,15 @@
-use crate::manifest::{Album, RecoupmentSetup, Setup, Track};
+use crate::manifest::{
+	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, RecoupmentSetup, Track,
+};
 use crate::project_data::{AccountingResult, ProjectData};
 use crate::sources::Source;
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
-use bigdecimal::{BigDecimal, Signed};
+use bigdecimal::BigDecimal;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::prelude::*;
 use serde::Deserialize;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -21,72 +24,74 @@ pub struct Project {
 	albums: HashMap<String, Album>,
 }
 impl Project {
-	fn new(dir: PathBuf, setup: Setup) -> Self {
-		let accounting_periods = setup
+	fn new(dir: PathBuf, manifest: Manifest) -> Self {
+		let accounting_periods = manifest
 			.accounting_periods
-			.into_iter()
-			.map(|accounting_period| {
-				let sources = accounting_period.to_sources(&dir);
-				AccountingPeriod {
-					name: accounting_period.name,
-					is_initial: accounting_period.is_initial.unwrap_or(false),
-					sources,
-				}
+			.iter()
+			.map(|accounting_period| AccountingPeriod {
+				name: accounting_period.name.clone(),
+				is_initial: accounting_period.is_initial.unwrap_or(false),
+				sources: Source::from_manifest(&accounting_period, &dir),
 			})
 			.collect();
+
+		let all_tracks = manifest.all_tracks();
 		let mut album_map = HashMap::new();
-		let mut track_map = HashMap::new();
-		for (i, track) in setup.tracks.iter().enumerate() {
+		let mut track_map: HashMap<String, usize> = HashMap::new();
+
+		for (i, track) in all_tracks.clone().into_iter().enumerate() {
+			// Insert track ISRCs into track_map
 			for isrc in track.isrcs() {
-				let replaced_track = track_map.insert(isrc.clone(), i);
-				if replaced_track.is_some() {
-					panic!("Duplicate ISRC found: {}", isrc);
-				}
+				match track_map.entry(isrc.clone()) {
+					Entry::Occupied(_) => panic!("Duplicate ISRC found: {isrc}"),
+					Entry::Vacant(entry) => entry.insert(i),
+				};
 			}
+			// Insert track singles into album_map (single_upc)
 			for single_upc in &track.single_upcs {
-				let replaced_album = album_map.insert(
-					single_upc.clone(),
-					Album {
-						isrcs: vec![track.main_isrc.clone()],
+				match album_map.entry(single_upc.clone()) {
+					Entry::Occupied(_) => panic!("Duplicate UPC found: {single_upc}"),
+					Entry::Vacant(entry) => entry.insert(Album {
 						upc: single_upc.clone(),
 						title: track.title.clone(),
-					},
-				);
-				if replaced_album.is_some() {
-					panic!("Duplicate UPC found: {}", single_upc);
-				}
+						isrcs: vec![track.main_isrc.clone()],
+						// We don't copy the recoupment because it already exists in the track
+						recoupment: None,
+					}),
+				};
 			}
 		}
-		for album in setup.albums {
-			if album.isrcs.is_empty() {
-				panic!("Empty album {}", album.upc);
-			}
-			let replaced_album = album_map.insert(album.upc.clone(), album.clone());
-			if replaced_album.is_some() {
-				panic!("Duplicate UPC found: {}", album.upc);
-			}
-			for isrc in album.isrcs {
-				if !track_map.contains_key(&isrc) {
-					panic!("Album {} contains non-existant ISRC {}", album.upc, isrc);
-				}
-			}
+
+		// Add albums to album_map
+		for catalog_item in manifest.catalog {
+			let album = match catalog_item {
+				CatalogItem::Album(album) => Album::from_manifest(album),
+				CatalogItem::Track(_) => continue,
+			};
+			let upc = album.upc.clone();
+			match album_map.entry(album.upc.clone()) {
+				Entry::Occupied(_) => panic!("Duplicate UPC found: {upc}"),
+				Entry::Vacant(entry) => entry.insert(album),
+			};
 		}
-		let data_file_path = dir.join(setup.inernal_data_file);
+
+		let data_file_path = dir.join(manifest.inernal_data_file);
 		let data = ProjectData::open(&data_file_path)
 			.context("Failed to open internal data file")
 			.unwrap();
+
 		Project {
 			data_file_path,
 			accounting_periods,
 			data,
-			tracks: setup.tracks,
+			tracks: all_tracks,
 			isrcs: track_map,
 			albums: album_map,
 		}
 	}
 	pub fn load(manifest_path: PathBuf) -> Result<Self> {
 		let project_dir = manifest_path.parent().unwrap().to_owned();
-		let manifest = Setup::from_path(manifest_path);
+		let manifest = Manifest::from_path(manifest_path);
 		Ok(Self::new(project_dir, manifest))
 	}
 	pub fn verify(&self) -> Result<()> {
@@ -95,6 +100,7 @@ impl Project {
 		}
 		self.verify_accounting_periods()?;
 		self.verify_tracks()?;
+		self.verify_albums()?;
 		self.verify_sources()?;
 		self.data.verify(self)?;
 		Ok(())
@@ -132,33 +138,39 @@ impl Project {
 				);
 			}
 
-			let recoupment_setup = match &track.recoupment {
-				Some(track_recoupment) => track_recoupment,
-				None => continue,
-			};
-			let mut total_recoup = BigDecimal::from(0);
-			let mut total_expenses = BigDecimal::from(0);
-			for recoupment in &recoupment_setup.recoupments {
-				total_recoup += &recoupment.recoup;
-				total_expenses += &recoupment.expense;
-				ensure!(total_recoup > 0);
-				ensure!(total_expenses > 0);
-				ensure!(
-					recoupment.recoup <= recoupment.expense,
-					"Recouped more than the expense: {:?}",
-					recoupment
-				);
-				ensure!(
-					recoupment.recoup <= track.max_recoup,
-					"Track recoupment exceeds max_group: {}",
-					track.title,
-				);
-				ensure!(
-					recoupment.note.is_some()
-						|| (recoupment.expense.is_positive() && recoupment.recoup.is_positive()),
-					"Negative recoupment must have a note: {:?}",
-					recoupment
-				);
+			if let Some(track_recoupment) = &track.recoupment {
+				track_recoupment.verify(&track.max_recoup)?;
+			}
+		}
+		Ok(())
+	}
+	fn verify_albums(&self) -> Result<()> {
+		for (upc, album) in &self.albums {
+			ensure!(!album.isrcs.is_empty(), "Empty album {upc}");
+
+			let mut tracks = Vec::new();
+			for isrc in &album.isrcs {
+				match self.get_track(isrc) {
+					Some(track) => tracks.push(track),
+					None => bail!("Album {upc} contains non-existant ISRC {isrc}"),
+				}
+			}
+
+			let max_recoup = &tracks[0].max_recoup;
+
+			for track in tracks {
+				ensure!(&track.max_recoup == max_recoup, "Max recoup mismatch. Currently not supported to have different max_recoups per track");
+
+				if album.recoupment.is_some() {
+					ensure!(
+						track.recoupment.is_none(),
+						"Recoupment cannot be on both the track and it's album."
+					);
+				}
+			}
+
+			if let Some(album_recoupment) = &album.recoupment {
+				album_recoupment.verify(max_recoup)?;
 			}
 		}
 		Ok(())
@@ -235,6 +247,32 @@ impl Project {
 		self.add_result(result)?;
 		self.data.save(&self.data_file_path)?;
 		Ok(())
+	}
+}
+
+#[derive(Clone)]
+pub struct Album {
+	pub upc: String,
+	pub title: String,
+	pub isrcs: Vec<String>,
+	pub recoupment: Option<RecoupmentManifest>,
+}
+impl Album {
+	pub fn from_manifest(album: AlbumManifest) -> Self {
+		let main_isrcs = album
+			.tracks
+			.iter()
+			.map(|track| match track {
+				AlbumTrack::Isrc(isrc) => isrc.clone(),
+				AlbumTrack::Track(track) => track.main_isrc.clone(),
+			})
+			.collect();
+		Album {
+			upc: album.upc.clone(),
+			title: album.title.clone(),
+			isrcs: main_isrcs,
+			recoupment: album.recoupment,
+		}
 	}
 }
 

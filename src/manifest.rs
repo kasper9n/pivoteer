@@ -1,10 +1,10 @@
-use crate::sources::{Source, SourceKind};
-use bigdecimal::BigDecimal;
+use anyhow::{ensure, Result};
+use bigdecimal::{BigDecimal, Signed};
 use deser_hjson;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +21,23 @@ impl Manifest {
 		prohibit_number_values(&value);
 
 		deser_hjson::from_str(&file_str).unwrap()
+	}
+	pub fn all_tracks(&self) -> Vec<Track> {
+		self.catalog
+			.iter()
+			.flat_map(|item| match item {
+				CatalogItem::Track(track) => vec![track.clone()],
+
+				CatalogItem::Album(album) => album
+					.tracks
+					.iter()
+					.filter_map(|album_track| match album_track {
+						AlbumTrack::Track(t) => Some(t.clone()),
+						AlbumTrack::Isrc(_) => None,
+					})
+					.collect(),
+			})
+			.collect()
 	}
 }
 
@@ -51,42 +68,6 @@ pub struct AccountingPeriodManifest {
 	#[serde(flatten)]
 	pub sources_by_platform: HashMap<String, Vec<SourceManifest>>,
 }
-impl AccountingPeriodManifest {
-	pub fn to_sources(&self, dir: &PathBuf) -> Vec<Source> {
-		self.sources_by_platform
-			.iter()
-			.map(|(platform, file_paths)| {
-				let kind = SourceKind::from_str(platform);
-				let sources = file_paths
-					.into_iter()
-					.map(|source_info| {
-						let source = match source_info {
-							SourceManifest::Path(file_path) => Source {
-								file_path: PathBuf::from(dir).join(file_path),
-								kind,
-								eur_usd_rate: None,
-							},
-							SourceManifest::FullSource(source_info) => Source {
-								file_path: PathBuf::from(dir).join(&source_info.path),
-								kind,
-								eur_usd_rate: source_info.eur_usd_rate.clone(),
-							},
-						};
-						if !Path::exists(&source.file_path) {
-							panic!(
-								"File not found: {:?}. From {} {}",
-								source.file_path, self.name, platform
-							);
-						}
-						source
-					})
-					.collect::<Vec<_>>();
-				sources
-			})
-			.flatten()
-			.collect()
-	}
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
@@ -97,23 +78,23 @@ pub enum SourceManifest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SourceDetailsManifest {
-	path: String,
-	eur_usd_rate: Option<BigDecimal>,
+	pub path: String,
+	pub eur_usd_rate: Option<BigDecimal>,
 	note: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum CatalogItem {
-	Album(Album),
+	Album(AlbumManifest),
 	Track(Track),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Album {
-	pub upc: Option<String>,
-	pub title: Option<String>,
+pub struct AlbumManifest {
+	pub upc: String,
+	pub title: String,
 	pub tracks: Vec<AlbumTrack>,
 	#[serde(flatten)]
 	pub recoupment: Option<RecoupmentManifest>,
@@ -159,6 +140,43 @@ pub struct RecoupmentManifest {
 	pub expenses: BigDecimal,
 	pub recoup: BigDecimal,
 	pub recoupments: Vec<RecoupableCost>,
+}
+impl RecoupmentManifest {
+	pub fn verify(&self, max_recoup: &BigDecimal) -> Result<()> {
+		let mut total_recoup = BigDecimal::from(0);
+		let mut total_expenses = BigDecimal::from(0);
+		for recoupment in &self.recoupments {
+			total_recoup += &recoupment.recoup;
+			total_expenses += &recoupment.expense;
+			ensure!(total_recoup > 0);
+			ensure!(total_expenses > 0);
+			ensure!(
+				recoupment.recoup <= recoupment.expense,
+				"Recouped more than the expense: {:?}",
+				recoupment
+			);
+			ensure!(
+				&total_recoup <= max_recoup,
+				"Track recoupment exceeds max_recoup: {:?}",
+				recoupment
+			);
+			ensure!(
+				recoupment.note.is_some()
+					|| (recoupment.expense.is_positive() && recoupment.recoup.is_positive()),
+				"Negative recoupment must have a note: {:?}",
+				recoupment
+			);
+		}
+		ensure!(
+			total_expenses == self.expenses,
+			"Expenses sum does not match listed expenses",
+		);
+		ensure!(
+			total_recoup == self.recoup,
+			"Recoup sum does not match listed recoup",
+		);
+		Ok(())
+	}
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

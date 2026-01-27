@@ -2,8 +2,10 @@ use bigdecimal::BigDecimal;
 use chrono::{Datelike, NaiveDate};
 use csv_pipeline::{Error, Pipeline};
 use regex::Regex;
-use std::fs::File;
 use std::path::PathBuf;
+use std::{fs::File, path::Path};
+
+use crate::manifest::{AccountingPeriodManifest, SourceManifest};
 
 /// Get the reporting period that the date is in
 fn reporting_period_of(date: &NaiveDate) -> String {
@@ -21,6 +23,41 @@ pub struct Source {
 	pub eur_usd_rate: Option<BigDecimal>,
 }
 impl Source {
+	pub fn from_manifest(manifest: &AccountingPeriodManifest, dir: &PathBuf) -> Vec<Self> {
+		manifest
+			.sources_by_platform
+			.iter()
+			.map(|(platform, file_paths)| {
+				let kind = SourceKind::from_str(platform);
+				let sources = file_paths
+					.into_iter()
+					.map(|source_info| {
+						let source = match source_info {
+							SourceManifest::Path(file_path) => Source {
+								file_path: PathBuf::from(dir).join(file_path),
+								kind,
+								eur_usd_rate: None,
+							},
+							SourceManifest::FullSource(source_info) => Source {
+								file_path: PathBuf::from(dir).join(&source_info.path),
+								kind,
+								eur_usd_rate: source_info.eur_usd_rate.clone(),
+							},
+						};
+						if !Path::exists(&source.file_path) {
+							panic!(
+								"File not found: {:?}. From {} {}",
+								source.file_path, manifest.name, platform
+							);
+						}
+						source
+					})
+					.collect::<Vec<_>>();
+				sources
+			})
+			.flatten()
+			.collect()
+	}
 	pub fn process_source(&self) -> Pipeline {
 		match &self.kind {
 			SourceKind::Bandcamp => bandcamp(&self.file_path),

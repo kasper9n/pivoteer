@@ -99,17 +99,14 @@ impl AccountingResult {
 	) -> Result<TrackStatementsMap> {
 		let track_recoupments = period.recoupments_by_track(project)?;
 
-		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.previous_period {
-			Some(previous_period) => {
+		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.is_initial {
+			true => HashMap::new(),
+			false => {
+				let previous_period = period.prev_period();
 				let previous_result = project
 					.data
-					.accounting_period_results
-					.iter()
-					.find(|accounting_result| accounting_result.name == *previous_period)
-					.context(format!(
-						"Could not find result from previous period \"{}\"",
-						previous_period
-					))?;
+					.get_accounting_result(&previous_period)
+					.context("Could not find result from previous period \"{previous_period}\"")?;
 				previous_result
 					.track_statements
 					.iter()
@@ -118,7 +115,6 @@ impl AccountingResult {
 					})
 					.collect()
 			}
-			None => HashMap::new(),
 		};
 
 		// Add previous costs
@@ -183,12 +179,6 @@ impl AccountingResult {
 		project: &Project,
 	) -> Result<ArtistStatementsMap> {
 		let mut artist_statements: ArtistStatementsMap = HashMap::new();
-		let previous_result = match &period.previous_period {
-			None => None,
-			Some(previous_period) => {
-				Some(project.data.get_accounting_result(previous_period).unwrap())
-			}
-		};
 
 		for track_statement in track_statements.values() {
 			let track = project.get_track(&track_statement.isrc).unwrap();
@@ -225,7 +215,11 @@ impl AccountingResult {
 		}
 
 		// Add statements for artists that have past statements, but no track royalties this period
-		if let Some(previous_result) = previous_result {
+		if !period.is_initial {
+			let previous_result = project
+				.data
+				.get_accounting_result(&period.prev_period())
+				.unwrap();
 			for (name, _statement) in previous_result.artist_statements.iter() {
 				artist_statements
 					.entry(name.clone())
