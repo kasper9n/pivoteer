@@ -2,7 +2,7 @@ use anyhow::{ensure, Result};
 use bigdecimal::{BigDecimal, Signed};
 use deser_hjson;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -64,9 +64,10 @@ fn prohibit_number_values(value: &serde_json::Value) {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountingPeriodManifest {
 	pub name: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub is_initial: Option<bool>,
 	#[serde(flatten)]
-	pub sources_by_platform: HashMap<String, Vec<SourceManifest>>,
+	pub sources_by_platform: BTreeMap<String, Vec<SourceManifest>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -112,6 +113,7 @@ pub enum AlbumTrack {
 pub struct Track {
 	#[serde(rename = "isrc")]
 	pub main_isrc: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub secondary_isrcs: Option<Vec<String>>,
 	pub single_upcs: Vec<String>,
 	pub title: String,

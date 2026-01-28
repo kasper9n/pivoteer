@@ -4,6 +4,7 @@ use project::Project;
 use std::path::PathBuf;
 
 mod manifest;
+mod manifest_old;
 mod project;
 mod project_data;
 mod sources;
@@ -22,11 +23,19 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
 	/// Generate results for an accounting period
+	Migrate(Migrate),
+	/// Generate results for an accounting period
 	Generate(Generate),
 	/// Generate results for all accounting periods up to the specified one
 	GenerateUpTo(GenerateUpTo),
 	/// Export already-generated accounting results
 	Export(Export),
+}
+
+#[derive(Args)]
+struct Migrate {
+	/// Path to .jsonc manifest file
+	destination_path: PathBuf,
 }
 
 #[derive(Args)]
@@ -55,11 +64,25 @@ struct Export {
 
 fn main() -> Result<()> {
 	let args = Cli::parse();
+	let manifest_path = args.manifest_path;
 
-	let mut project = Project::load(PathBuf::from(args.manifest_path))?;
+	match args.command {
+		Commands::Migrate(arg) => {
+			let settings = manifest_old::Settings::from_path(manifest_path);
+			let manifest = settings.migrate();
+			let buf = to_json_string_pretty(&manifest)?;
+			std::fs::write(arg.destination_path, buf).context("Failed to write data file")?;
+			return Ok(());
+		}
+		_ => {}
+	}
+
+	let mut project = Project::load(PathBuf::from(manifest_path))?;
 	project.verify()?;
 
 	match args.command {
+		Commands::Migrate(_) => {}
+
 		Commands::Generate(args) => {
 			let accounting_period = project
 				.get_accounting_period(&args.accounting_period_name)
