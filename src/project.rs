@@ -140,7 +140,9 @@ impl Project {
 			}
 
 			if let Some(track_recoupment) = &track.recoupment {
-				track_recoupment.verify(&track.max_recoup)?;
+				track_recoupment
+					.verify(&track.max_recoup)
+					.context(format!("Invalid recoupment for {}", track.title))?;
 			}
 		}
 		Ok(())
@@ -151,7 +153,8 @@ impl Project {
 
 			let mut tracks = Vec::new();
 			for isrc in &album.isrcs {
-				match self.get_track(isrc) {
+				// Allow secondary ISRCs to be used in albums
+				match self.get_track_by_any_isrc(isrc) {
 					Some(track) => tracks.push(track),
 					None => bail!("Album {upc} contains non-existant ISRC {isrc}"),
 				}
@@ -160,9 +163,9 @@ impl Project {
 			let max_recoup = &tracks[0].max_recoup;
 
 			for track in tracks {
-				ensure!(&track.max_recoup == max_recoup, "Max recoup mismatch. Currently not supported to have different max_recoups per track");
-
 				if album.recoupment.is_some() {
+					ensure!(&track.max_recoup == max_recoup, "{}: Max recoup mismatch. Currently not supported to have different max_recoups per track", track.title);
+
 					ensure!(
 						track.recoupment.is_none(),
 						"Recoupment cannot be on both the track and it's album."
@@ -389,7 +392,7 @@ pub struct YearQuarter {
 }
 impl YearQuarter {
 	pub fn parse(s: &str) -> Self {
-		let parts = s.split(" ").collect::<Vec<_>>();
+		let parts = s.split(" Q").collect::<Vec<_>>();
 		assert_eq!(parts.len(), 2);
 
 		let value = Self {

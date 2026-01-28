@@ -105,8 +105,9 @@ fn main() -> Result<()> {
 					.context("Accounting period from argument not found")?;
 				let accounting_result = accounting_period.generate_result(&project)?;
 
+				project.add_result(accounting_result)?;
 				if args.save {
-					project.add_and_save_result(accounting_result)?;
+					project.data.save(&project.data_file_path)?;
 				} else {
 					println!("Finished! Re-run with --save it all seems good");
 				}

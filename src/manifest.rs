@@ -150,8 +150,8 @@ impl RecoupmentManifest {
 		for recoupment in &self.recoupments {
 			total_recoup += &recoupment.recoup;
 			total_expenses += &recoupment.expense;
-			ensure!(total_recoup > 0);
-			ensure!(total_expenses > 0);
+			ensure!(total_recoup >= 0,);
+			ensure!(total_expenses >= 0);
 			ensure!(
 				recoupment.recoup <= recoupment.expense,
 				"Recouped more than the expense: {:?}",
@@ -164,18 +164,20 @@ impl RecoupmentManifest {
 			);
 			ensure!(
 				recoupment.note.is_some()
-					|| (recoupment.expense.is_positive() && recoupment.recoup.is_positive()),
+					|| !(recoupment.expense.is_negative() && !recoupment.recoup.is_negative()),
 				"Negative recoupment must have a note: {:?}",
 				recoupment
 			);
 		}
 		ensure!(
 			total_expenses == self.expenses,
-			"Expenses sum does not match listed expenses",
+			"Expenses sum does {total_expenses} not match listed expenses {}",
+			self.expenses,
 		);
 		ensure!(
 			total_recoup == self.recoup,
-			"Recoup sum does not match listed recoup",
+			"Recoup sum {total_recoup} does not match listed recoup {}",
+			self.recoup,
 		);
 		Ok(())
 	}
