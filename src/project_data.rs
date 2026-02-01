@@ -352,6 +352,13 @@ mod test {
 /// ISRC -> TrackStatement
 type TrackStatementsMap = HashMap<String, TrackStatement>;
 
+fn normalized_serialize<S>(x: &BigDecimal, s: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	x.normalized().serialize(s)
+}
+
 /// ## Example
 ///
 /// | Type               |   Jan |   Feb |   Apr |   Mar |   May |
@@ -366,11 +373,15 @@ struct TrackStatement {
 	isrc: String,
 	title: String,
 	/// All-time track royalties minus all-time track costs
+	#[serde(serialize_with = "normalized_serialize")]
 	opening_net_amount: BigDecimal,
+	#[serde(serialize_with = "normalized_serialize")]
 	gross_royalties: BigDecimal,
 	/// New recoupable costs
+	#[serde(serialize_with = "normalized_serialize")]
 	new_costs: BigDecimal,
 	/// All-time track royalties minus all-time track costs
+	#[serde(serialize_with = "normalized_serialize")]
 	net_amount: BigDecimal,
 }
 impl TrackStatement {
@@ -384,6 +395,7 @@ impl TrackStatement {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct ArtistStatement {
+	#[serde(serialize_with = "normalized_serialize")]
 	net_royalties: BigDecimal,
 	tracks: Vec<ArtistTrackStatement>,
 }
@@ -393,5 +405,6 @@ type ArtistStatementsMap = HashMap<String, ArtistStatement>;
 #[serde(deny_unknown_fields)]
 struct ArtistTrackStatement {
 	pub isrc: String,
+	#[serde(serialize_with = "normalized_serialize")]
 	pub net_royalties: BigDecimal,
 }
