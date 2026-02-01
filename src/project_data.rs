@@ -97,7 +97,7 @@ impl AccountingResult {
 		period: &AccountingPeriod,
 		project: &Project,
 	) -> Result<TrackStatementsMap> {
-		let track_recoupments = period.recoupments_by_track(project)?;
+		let new_recoupable_costs = period.recoupable_costs_by_track(project)?;
 
 		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.is_initial {
 			true => HashMap::new(),
@@ -129,14 +129,14 @@ impl AccountingResult {
 			.collect();
 
 		// Add new costs
-		for track_recoupment in track_recoupments.into_values() {
+		for new_recoupable_costs in new_recoupable_costs.into_values() {
 			let statement = statements
-				.entry(track_recoupment.isrc.clone())
+				.entry(new_recoupable_costs.isrc.clone())
 				.or_insert_with(|| TrackStatement {
-					isrc: track_recoupment.isrc.clone(),
+					isrc: new_recoupable_costs.isrc.clone(),
 					..Default::default()
 				});
-			statement.new_costs = track_recoupment.recoup;
+			statement.new_costs = new_recoupable_costs.recoup;
 		}
 
 		// Add track statements for everything in the sales report

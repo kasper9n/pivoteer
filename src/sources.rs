@@ -8,7 +8,7 @@ use std::{fs::File, path::Path};
 use crate::manifest::{AccountingPeriodManifest, SourceManifest};
 
 /// Get the reporting period that the date is in
-fn reporting_period_of(date: &NaiveDate) -> String {
+pub fn reporting_period_of(date: &NaiveDate) -> String {
 	date.with_day(1).unwrap().format("%Y-%m").to_string()
 }
 

@@ -1,6 +1,7 @@
 use crate::manifest::{
-	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, Track,
+	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupableCost, RecoupmentManifest, Track,
 };
+use crate::manifest_old::Recoupment;
 use crate::project_data::{AccountingResult, ProjectData};
 use crate::sources::{parse_date, Source};
 use crate::track_sales_report::TrackSalesReport;
@@ -12,6 +13,7 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -287,11 +289,9 @@ pub struct AccountingPeriod {
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
-	pub fn year(&self) -> u16 {
-		YearQuarter::parse(&self.name).year
-	}
-	pub fn quarter(&self) -> u8 {
-		YearQuarter::parse(&self.name).quarter
+	pub fn contains_date(&self, date: &str) -> bool {
+		let year_quarter = YearQuarter::parse(&self.name);
+		year_quarter.contains_date(date)
 	}
 	pub fn prev_period(&self) -> String {
 		let current = YearQuarter::parse(&self.name);
@@ -323,13 +323,11 @@ impl AccountingPeriod {
 	pub fn generate_result(&self, project: &Project) -> Result<AccountingResult> {
 		AccountingResult::generate(self, project)
 	}
-	pub fn recoupments_by_track(
+	pub fn recoupable_costs_by_track(
 		&self,
 		project: &Project,
 	) -> Result<HashMap<String, TrackRecoupment>> {
-		let mut track_recoupments = HashMap::new();
-		let period_year: i32 = self.year().into();
-		let period_quarter: u32 = self.quarter().into();
+		let mut track_recoupments: HashMap<String, TrackRecoupment> = HashMap::new();
 
 		for (_, album) in &project.albums {
 			assert!(
@@ -339,37 +337,39 @@ impl AccountingPeriod {
 		}
 
 		for track in &project.tracks {
-			let track_recoupment = match track_recoupments.entry(track.main_isrc.clone()) {
-				Entry::Occupied(_) => panic!("Duplicate ISRC recoupment {}", track.main_isrc),
-				Entry::Vacant(entry) => entry.insert(TrackRecoupment {
-					isrc: track.main_isrc.clone(),
-					expense: BigDecimal::from(0),
-					recoup: BigDecimal::from(0),
-					name: track.title.clone(),
-					note: None,
-				}),
+			ensure!(
+				!track_recoupments.contains_key(&track.main_isrc),
+				"Duplicate ISRC in recoupment"
+			);
+			let recoupment_manifest = match &track.recoupment {
+				Some(v) => v,
+				None => continue,
 			};
-			if let Some(recoupment_manifest) = &track.recoupment {
-				for recoupment in &recoupment_manifest.recoupments {
-					// Make sure the date is in the accounting period
-					let date = parse_date(&recoupment.date, "%Y-%m-%d").unwrap();
-					let in_year = date.year() == period_year;
-					let in_quarter = date.quarter() == period_quarter;
-					if in_year && in_quarter {
-						track_recoupment.expense += track_recoupment.expense.clone();
-						track_recoupment.recoup += track_recoupment.recoup.clone();
-						ensure!(
-							track_recoupment.recoup <= track.max_recoup,
-							"Track recoupment exceeds max_recoup: {}",
-							track_recoupment.name,
-						);
-						ensure!(
-							track_recoupment.recoup <= track_recoupment.expense,
-							"{} track recoupment exceeds expenses: {}",
-							recoupment.date,
-							track_recoupment.name,
-						);
-					}
+			for cost in &recoupment_manifest.recoupments {
+				if self.contains_date(&cost.date) {
+					let track_recoupment = track_recoupments
+						.entry(track.main_isrc.clone())
+						.or_insert(TrackRecoupment {
+							isrc: track.main_isrc.clone(),
+							expense: BigDecimal::from(0),
+							recoup: BigDecimal::from(0),
+							name: track.title.clone(),
+							note: None,
+						});
+					track_recoupment.expense += cost.expense.clone();
+					track_recoupment.recoup += cost.recoup.clone();
+					todo!("These two need to be checked elsewhere:");
+					ensure!(
+						track_recoupment.recoup <= track.max_recoup,
+						"Track recoupment exceeds max_recoup: {}",
+						track_recoupment.name,
+					);
+					ensure!(
+						track_recoupment.recoup <= track_recoupment.expense,
+						"{} track recoupment exceeds expenses: {}",
+						cost.date,
+						track_recoupment.name,
+					);
 				}
 			}
 		}
@@ -377,6 +377,7 @@ impl AccountingPeriod {
 	}
 }
 
+#[derive(Debug)]
 pub struct TrackRecoupment {
 	pub isrc: String,
 	expense: BigDecimal,
@@ -417,6 +418,11 @@ impl YearQuarter {
 		}
 		value.assert_valid();
 		value
+	}
+	pub fn contains_date(&self, date: &str) -> bool {
+		let date = parse_date(date, "%Y-%m-%d").unwrap();
+		let period_of_date = date.format("%Y %q").to_string();
+		period_of_date == format!("{} {}", self.year, self.quarter)
 	}
 }
 
