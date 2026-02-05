@@ -1,3 +1,4 @@
+use crate::accounting::{Accounts, Voucher};
 use crate::project::{AccountingPeriod, Project};
 use crate::to_json_string_pretty;
 use crate::track_sales_report::TrackSalesReport;
@@ -16,10 +17,12 @@ fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectData {
-	pub accounting_period_results: Vec<AccountingResult>,
+pub struct AccountingData {
+	pub last_voucher_id: u32,
+	pub accounts: Accounts,
+	pub accounting_period_results: Vec<AccountingPeriodResult>,
 }
-impl ProjectData {
+impl AccountingData {
 	pub fn open(data_file_path: &PathBuf) -> Result<Self> {
 		let internal_data_str = fs::read_to_string(&data_file_path)?;
 		Ok(serde_json::from_str(&internal_data_str).unwrap())
@@ -43,7 +46,7 @@ impl ProjectData {
 		Ok(())
 	}
 
-	pub fn get_accounting_result(&self, name: &str) -> Option<&AccountingResult> {
+	pub fn get_accounting_result(&self, name: &str) -> Option<&AccountingPeriodResult> {
 		self.accounting_period_results
 			.iter()
 			.find(|accounting_period| accounting_period.name == name)
@@ -53,6 +56,12 @@ impl ProjectData {
 		let buf = to_json_string_pretty(&self)?;
 		fs::write(data_file_path, buf).context("Failed to write data file")?;
 		Ok(())
+	}
+
+	pub fn generate_voucher_id(&mut self) -> u32 {
+		let id = self.last_voucher_id;
+		self.last_voucher_id += 1;
+		id
 	}
 }
 
@@ -68,24 +77,25 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct AccountingResult {
+pub struct AccountingPeriodResult {
 	pub name: String,
 	pub is_initial: bool,
-	#[serde(serialize_with = "sorted_map")]
-	track_statements: TrackStatementsMap,
-	#[serde(serialize_with = "sorted_map")]
-	artist_statements: HashMap<String, ArtistStatement>,
+	pub is_closed: bool,
+	pub vouchers: Vec<Voucher>,
 }
 
-impl AccountingResult {
-	pub fn generate(period: &AccountingPeriod, project: &Project) -> Result<AccountingResult> {
+impl AccountingPeriodResult {
+	pub fn generate(
+		period: &AccountingPeriod,
+		project: &Project,
+	) -> Result<AccountingPeriodResult> {
 		let sales_report = period.generate_sales_report();
 		let track_sales_report = sales_report.into_track_sales_report(&project);
 		let track_statements =
 			Self::generate_track_statements(track_sales_report, period, project)?;
 		let artist_statements =
 			Self::generate_artist_statements(&track_statements, period, &project)?;
-		Ok(AccountingResult {
+		Ok(AccountingPeriodResult {
 			name: period.name.clone(),
 			is_initial: period.is_initial,
 			track_statements,
@@ -317,14 +327,14 @@ struct ArtistTrackStatementExport {
 #[cfg(test)]
 mod test {
 	use crate::project::Project;
-	use crate::project_data::ProjectData;
+	use crate::project_data::AccountingData;
 	use anyhow::Result;
 	use pretty_assertions::assert_eq;
 	use std::path::PathBuf;
 
 	#[test]
 	fn test_generate_artist_statements() -> Result<()> {
-		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"))?;
+		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"));
 
 		let q1_result = project
 			.get_accounting_period("1999 Q1")
@@ -339,7 +349,7 @@ mod test {
 		project.add_result(q2_result)?;
 
 		let expected_data =
-			ProjectData::open(&PathBuf::from("test/Internal data expected.json")).unwrap();
+			AccountingData::open(&PathBuf::from("test/Internal data expected.json")).unwrap();
 
 		assert_eq!(
 			project.data.accounting_period_results,

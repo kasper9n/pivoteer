@@ -1,21 +1,66 @@
 {
+	"accounts": {
+		"revenue": {
+			"id": "revenue",
+			"name": "revenue",
+			"kind": "Revenue",
+		},
+		"track:A": {
+			"id": "track:A",
+			"name": "track:A",
+			"kind": "TrackAsset",
+		},
+		"expense:isrc:A": {
+			"id": "expense:isrc:A",
+			"name": "expense:isrc:A",
+			"kind": "Expense",
+		},
+		"artist:Salvatore Ganacci": {
+			"id": "artist:Salvatore Ganacci",
+			"name": "artist:Salvatore Ganacci",
+			"kind": "ArtistLiability",
+		},
+	},
 	"accounting_period_results": [
+		{
+			"last_voucher_id": 0,
+			"vouchers": [
+				{
+					"id": 0,
+					"date": "2026-03-31",
+					"entries": [
+						{ "account_id": "revenue", "amount": "-100" },
+						{ "account_id": "track:A", "amount": "100" },
+					],
+				},
+				{
+					"id": 1,
+					"date": "2026-03-31",
+					"entries": [
+						{ "account_id": "track:A", "amount": "-100" },
+						{ "account_id": "recoupment:track:A", "amount": "50" },
+						{ "account_id": "artist:Salvatore Ganacci", "amount": "50" },
+					],
+				}
+			],
+		},
 		{
 			"name": "1999 Q2",
 			"is_locked": false,
 			"track_statements": {
-				// Royalties are incomes, so they have positive balances
+				// Roylties are income from someone else, so they have negative balances
 				"A": {
 					"title": "Salvatore Ganacci - Fight Dirty",
 					// opening royalties: 30
-					"new_royalties": "20",
-					"closing_royalties": "50",
-					"new_recouped": "-20",
-					"new_payable_royalties": "0"
+					"new_royalties": "-100",
+					"closing_royalties": "-100",
+					"new_recouped": "20",
+					"new_artist_net_royalties": "0",
 				}
 			},
 			"recoupment_accounts": {
-				// Amounts recouped are future incomes, so they have positive balances
+				// Recoupables have positive balances
+				// Recoupables are future incomes, so they have positive balances
 				"upc_1": {
 					// opening balance: 100
 					"new_recoupables": "50",
@@ -24,14 +69,14 @@
 				}
 			},
 			"artist_net_royalties": {
-				// Artist balances are debts, so they have negative balances
+				// Artist accounts are positive. This is an expense account (an amount that the artists "own"), not debt to the artists (debt would've been negative)
 				"Salvatore Ganacci": {
 					// opening_net_royalties: 0
 					"new_net_royalties": "0",
 					"tracks": [
 						{
 							"isrc": "A",
-							"net_royalties": "-0.00"
+							"net_royalties": "0.00"
 						}
 					]
 				}

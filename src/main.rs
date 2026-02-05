@@ -3,6 +3,10 @@ use clap::{Args, Parser, Subcommand};
 use project::Project;
 use std::path::PathBuf;
 
+use crate::generator::generate;
+
+mod accounting;
+mod generator;
 mod manifest;
 mod manifest_old;
 mod project;
@@ -84,49 +88,50 @@ fn main() -> Result<()> {
 		Commands::Migrate(_) => {}
 
 		Commands::Generate(args) => {
-			let accounting_period = project
-				.get_accounting_period(&args.accounting_period_name)
-				.context("Accounting period from argument not found")?;
-			let accounting_result = accounting_period.generate_result(&project)?;
+			project.generate();
+			// let accounting_period = project
+			// 	.get_accounting_period(&args.accounting_period_name)
+			// 	.context("Accounting period from argument not found")?;
+			// let accounting_result = accounting_period.generate_result(&project)?;
 
-			if args.save {
-				project.add_and_save_result(accounting_result)?;
-			} else {
-				println!("Finished! Re-run with --save it all seems good");
-			}
+			// if args.save {
+			// 	project.add_and_save_result(accounting_result)?;
+			// } else {
+			// 	println!("Finished! Re-run with --save it all seems good");
+			// }
 		}
 
 		Commands::GenerateUpTo(args) => {
-			let periods = project.accounting_periods.clone();
-			for accounting_period in periods {
-				let end_now = accounting_period.name == args.accounting_period_name;
-				let accounting_period = project
-					.get_accounting_period(&accounting_period.name)
-					.context("Accounting period from argument not found")?;
-				let accounting_result = accounting_period.generate_result(&project)?;
+			// let periods = project.accounting_periods.clone();
+			// for accounting_period in periods {
+			// 	let end_now = accounting_period.name == args.accounting_period_name;
+			// 	let accounting_period = project
+			// 		.get_accounting_period(&accounting_period.name)
+			// 		.context("Accounting period from argument not found")?;
+			// 	let accounting_result = accounting_period.generate_result(&project)?;
 
-				project.add_result(accounting_result)?;
-				if args.save {
-					project.data.save(&project.data_file_path)?;
-				} else {
-					println!("Finished! Re-run with --save it all seems good");
-				}
+			// 	project.add_result(accounting_result)?;
+			// 	if args.save {
+			// 		project.accounting.save(&project.data_file_path)?;
+			// 	} else {
+			// 		println!("Finished! Re-run with --save it all seems good");
+			// 	}
 
-				if end_now {
-					break;
-				}
-			}
+			// 	if end_now {
+			// 		break;
+			// 	}
+			// }
 		}
 
 		Commands::Export(args) => {
-			let result = project
-				.data
-				.get_accounting_result(&args.accounting_period_name)
-				.context("No result")?;
-			let file_name = result.name.to_string() + ".json";
-			let export = result.export();
-			export.save_to_downloads(file_name)?;
-			return Ok(());
+			// let result = project
+			// 	.accounting
+			// 	.get_accounting_result(&args.accounting_period_name)
+			// 	.context("No result")?;
+			// let file_name = result.name.to_string() + ".json";
+			// let export = result.export();
+			// export.save_to_downloads(file_name)?;
+			// return Ok(());
 		}
 	}
 

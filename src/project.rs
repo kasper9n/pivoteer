@@ -1,15 +1,17 @@
+use crate::accounting::Accounts;
+use crate::generator;
 use crate::manifest::{
 	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupableCost, RecoupmentManifest, Track,
 };
 use crate::manifest_old::Recoupment;
-use crate::project_data::{AccountingResult, ProjectData};
+use crate::project_data::{AccountingPeriodResult, AccountingData};
 use crate::sources::{parse_date, Source};
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::BigDecimal;
 use chrono::Datelike;
 use csv_pipeline::{Pipeline, Transformer};
-use rayon::prelude::*;
+use rayon::prelude::;
 use serde::Deserialize;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -20,21 +22,23 @@ use std::str::FromStr;
 pub struct Project {
 	pub data_file_path: PathBuf,
 	pub accounting_periods: Vec<AccountingPeriod>,
-	pub data: ProjectData,
+	pub data: AccountingData,
 	/// We use a vec because multiple ISRCs can point to the same Track
 	tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
 	albums: HashMap<String, Album>,
 }
 impl Project {
-	fn new(dir: PathBuf, manifest: Manifest) -> Self {
+	pub fn load(manifest_path: PathBuf) -> Self {
+		let project_dir = manifest_path.parent().unwrap().to_owned();
+		let manifest = Manifest::from_path(manifest_path);
 		let accounting_periods = manifest
 			.accounting_periods
 			.iter()
 			.map(|accounting_period| AccountingPeriod {
 				name: accounting_period.name.clone(),
 				is_initial: accounting_period.is_initial.unwrap_or(false),
-				sources: Source::from_manifest(&accounting_period, &dir),
+				sources: Source::from_manifest(&accounting_period, &project_dir),
 			})
 			.collect();
 
@@ -78,8 +82,8 @@ impl Project {
 			};
 		}
 
-		let data_file_path = dir.join(manifest.inernal_data_file);
-		let data = ProjectData::open(&data_file_path)
+		let data_file_path = project_dir.join(manifest.inernal_data_file);
+		let data = AccountingData::open(&data_file_path)
 			.context("Failed to open internal data file")
 			.unwrap();
 
@@ -91,11 +95,6 @@ impl Project {
 			isrcs: track_map,
 			albums: album_map,
 		}
-	}
-	pub fn load(manifest_path: PathBuf) -> Result<Self> {
-		let project_dir = manifest_path.parent().unwrap().to_owned();
-		let manifest = Manifest::from_path(manifest_path);
-		Ok(Self::new(project_dir, manifest))
 	}
 	pub fn verify(&self) -> Result<()> {
 		if !Path::exists(&self.data_file_path) {
@@ -205,6 +204,9 @@ impl Project {
 		}
 		Ok(())
 	}
+	pub fn generate(project:&mut Project) -> Result<()> {
+		generator::generate(project)
+	}
 	pub fn get_track_by_any_isrc(&self, isrc: &str) -> Option<&Track> {
 		let index = *self.isrcs.get(isrc)?;
 		Some(&self.tracks[index])
@@ -219,12 +221,20 @@ impl Project {
 	pub fn get_album(&self, upc: &str) -> Option<&Album> {
 		self.albums.get(upc)
 	}
+	pub fn get_album_containing_isrc(&self, isrc: &str) -> Option<&Album> {
+		for (_, album) in &self.albums {
+			if album.isrcs.contains(isrc) {
+				return Some(album);
+			}
+		}
+		None
+	}
 	pub fn get_accounting_period(&self, name: &str) -> Option<&AccountingPeriod> {
 		self.accounting_periods
 			.iter()
 			.find(|accounting_period| accounting_period.name == name)
 	}
-	pub fn add_result(&mut self, result: AccountingResult) -> Result<()> {
+	pub fn add_result(&mut self, result: AccountingPeriod) -> Result<()> {
 		let period = self.get_accounting_period(&result.name).unwrap();
 		match self.data.accounting_period_results.last() {
 			Some(last_result) => {
@@ -249,7 +259,7 @@ impl Project {
 		};
 		Ok(())
 	}
-	pub fn add_and_save_result(&mut self, result: AccountingResult) -> Result<()> {
+	pub fn add_and_save_result(&mut self, result: AccountingPeriod) -> Result<()> {
 		self.add_result(result)?;
 		self.data.save(&self.data_file_path)?;
 		Ok(())
@@ -298,6 +308,9 @@ impl AccountingPeriod {
 		let prev = current.get_prev();
 		format!("{} Q{}", prev.year, prev.quarter)
 	}
+	pub fn end_date(&self) -> NaiveDate {
+		let year_quarter = YearQuarter::parse(&self.name);
+	}
 	fn generate_sales_report_csv_str(&self) -> String {
 		let files: Vec<_> = self
 			.sources
@@ -320,8 +333,8 @@ impl AccountingPeriod {
 		let sales_report_csv = self.generate_sales_report_csv_str();
 		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
 	}
-	pub fn generate_result(&self, project: &Project) -> Result<AccountingResult> {
-		AccountingResult::generate(self, project)
+	pub fn generate_result(&self, project: &Project) -> Result<AccountingPeriodResult> {
+		AccountingPeriodResult::generate(self, project)
 	}
 	pub fn recoupable_costs_by_track(
 		&self,
@@ -423,6 +436,15 @@ impl YearQuarter {
 		let date = parse_date(date, "%Y-%m-%d").unwrap();
 		let period_of_date = date.format("%Y %q").to_string();
 		period_of_date == format!("{} {}", self.year, self.quarter)
+	}
+	pub fn end_date(&self) -> NaiveDate {
+		match quarter {
+        1 => NaiveDate::from_ymd_opt(year, 3, 31),
+        2 => NaiveDate::from_ymd_opt(year, 6, 30),
+        3 => NaiveDate::from_ymd_opt(year, 9, 30),
+        4 => NaiveDate::from_ymd_opt(year, 12, 31),
+        _ => panic!("Invalid quarter"),
+    }
 	}
 }
 
