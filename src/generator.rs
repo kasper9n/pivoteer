@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
 	accounting::{AccountId, Entry, Voucher},
 	project::{Project, YearQuarter},
@@ -22,18 +24,21 @@ pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<Accounting
 		is_locked: false,
 		revenue_voucher,
 		recoupment_vouchers,
-		track_distribution_vouchers: Vec::new(),
-		closing_revenue_balances: todo!(),
-		closing_recoupment_balances: todo!(),
-		closing_artist_balances: todo!(),
+		track_distribution_vouchers: HashMap::new(),
+		closing_balances: HashMap::new(),
 	};
 
-	let mut track_distribution_vouchers = result.track_distribution_vouchers;
 	for (isrc, amount) in track_sales_report.tracks {
-		let voucher =
-			distribute_track_revenue(&mut result, &mut project, &isrc, &amount.gross_royalties)?;
-		track_distribution_vouchers.push(voucher);
+		let voucher = distribute_track_revenue(&result, project, &isrc, &amount.gross_royalties)?;
+		let replaced = result.track_distribution_vouchers.insert(isrc, voucher);
+		assert!(
+			replaced.is_none(),
+			"Duplicate of track distribution voucher {:?}",
+			replaced
+		);
 	}
+
+	result.closing_balances = result.get_closing_balances(&project);
 
 	Ok(result)
 }
@@ -138,7 +143,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 }
 
 fn distribute_track_revenue(
-	result: &mut AccountingPeriodResult,
+	result: &AccountingPeriodResult,
 	project: &mut Project,
 	isrc: &str,
 	revenue: &BigDecimal,
@@ -158,29 +163,28 @@ fn distribute_track_revenue(
 	let mut remaining = revenue.clone();
 
 	// Recoup recoupable expenses
-	let recoupment_balance = result
-		.get_recoupment_account_associated_with_track(&isrc, &project)
-		.and_then(|recoupment_account| {
-			result.get_closing_recoupment_balance(&recoupment_account, &project)
-		});
-	if let Some(recoupment_balance) = recoupment_balance {
-		match recoupment_balance.account {
-			AccountId::Track(_) => {
-				// Recoupment balance is negative because it's a future receivable amount
-				let recoupables = -recoupment_balance.amount;
-				if remaining > 0 && recoupables > 0 {
-					let amount_to_recoup = BigDecimal::min(remaining.clone(), recoupables);
-					remaining -= &amount_to_recoup;
-					entries.push(Entry {
-						account: AccountId::RecoupmentTrack(isrc.to_string()),
-						amount: amount_to_recoup,
-						note: None,
-					});
+	let recoupment_account = result.get_recoupment_account_associated_with_track(&isrc, &project);
+	if let Some(recoupment_account) = recoupment_account {
+		let recoupment_balance = result.get_closing_balance(&recoupment_account, &project);
+		if let Some(recoupment_balance) = recoupment_balance {
+			match recoupment_account {
+				AccountId::RecoupmentTrack(_) => {
+					// Recoupment balance is negative because it's a future receivable amount
+					let recoupables = -recoupment_balance;
+					if remaining > 0 && recoupables > 0 {
+						let amount_to_recoup = BigDecimal::min(remaining.clone(), recoupables);
+						remaining -= &amount_to_recoup;
+						entries.push(Entry {
+							account: AccountId::RecoupmentTrack(isrc.to_string()),
+							amount: amount_to_recoup,
+							note: None,
+						});
+					}
 				}
+				AccountId::RecoupmentAlbum(_) => todo!("Album recoupment not implemented yet"),
+				_ => panic!(),
 			}
-			AccountId::RecoupmentAlbum(_) => todo!("Album recoupment not implemented yet"),
-			_ => panic!(),
-		};
+		}
 	}
 
 	let splittable_royalties = remaining;

@@ -1,13 +1,14 @@
-use crate::accounting::{sum_account_vouchers, AccountId, Balance, Voucher};
+use crate::accounting::{AccountId, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::iter::once;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -82,13 +83,9 @@ pub struct AccountingPeriodResult {
 	pub is_locked: bool,
 	pub revenue_voucher: Voucher,
 	pub recoupment_vouchers: Vec<Voucher>,
-	pub track_distribution_vouchers: Vec<Voucher>,
+	pub track_distribution_vouchers: HashMap<String, Voucher>,
 	#[serde(serialize_with = "sorted_map")]
-	pub closing_revenue_balances: HashMap<String, BigDecimal>,
-	#[serde(serialize_with = "sorted_map")]
-	pub closing_recoupment_balances: HashMap<String, BigDecimal>,
-	#[serde(serialize_with = "sorted_map")]
-	pub closing_artist_balances: HashMap<String, BigDecimal>,
+	pub closing_balances: HashMap<String, BigDecimal>,
 }
 
 impl AccountingPeriodResult {
@@ -107,27 +104,51 @@ impl AccountingPeriodResult {
 	pub fn end_date(&self) -> NaiveDate {
 		self.name.end_date()
 	}
-	pub fn get_closing_recoupment_balance(
+	pub fn get_closing_balances(&self, project: &Project) -> HashMap<String, BigDecimal> {
+		let prev_result = self.prev_result(project);
+		let prev_closing_balances = prev_result.map(|r| r.closing_balances.clone());
+
+		let mut closing_balances = prev_closing_balances.unwrap_or_default();
+
+		let vouchers = once(&self.revenue_voucher)
+			.chain(self.recoupment_vouchers.iter())
+			.chain(self.track_distribution_vouchers.values());
+		for voucher in vouchers {
+			for entry in &voucher.entries {
+				let closing_balance = closing_balances
+					.entry(entry.account.to_string())
+					.or_insert(BigDecimal::zero());
+				*closing_balance += &entry.amount;
+			}
+		}
+
+		closing_balances
+	}
+	pub fn get_closing_balance(
 		&self,
 		account: &AccountId,
 		project: &Project,
-	) -> Option<Balance> {
-		let prev_closing_balance = self.prev_result(project).and_then(|prev_result| {
-			prev_result
-				.closing_recoupment_balances
-				.get(&account.recoupment_account_id())
-				.cloned()
-		});
-		let balance_change = sum_account_vouchers(account, &self.recoupment_vouchers);
-		if prev_closing_balance.is_some() || balance_change.is_some() {
-			Some(Balance {
-				account: account.clone(),
-				amount: prev_closing_balance.unwrap_or_default()
-					+ balance_change.unwrap_or_default(),
-			})
-		} else {
-			None
+	) -> Option<BigDecimal> {
+		let prev_result = self.prev_result(project);
+		let prev_closing_balance = prev_result
+			.map(|r| r.closing_balances.get(&account.to_string()))
+			.flatten();
+
+		let mut closing_balance = prev_closing_balance.cloned();
+
+		let vouchers = once(&self.revenue_voucher)
+			.chain(self.recoupment_vouchers.iter())
+			.chain(self.track_distribution_vouchers.values());
+		for voucher in vouchers {
+			for entry in &voucher.entries {
+				if &entry.account == account {
+					let closing_balance = closing_balance.get_or_insert(BigDecimal::zero());
+					*closing_balance += &entry.amount;
+				}
+			}
 		}
+
+		closing_balance
 	}
 	pub fn get_recoupment_account_associated_with_track(
 		&self,
