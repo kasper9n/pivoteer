@@ -2,6 +2,7 @@ use crate::manifest::{
 	self, AccountingPeriodManifest, AlbumManifest, AlbumTrack, CatalogItem, Manifest,
 	RecoupableCost, RecoupmentManifest, SourceManifest, Split,
 };
+use crate::project::YearQuarter;
 use bigdecimal::BigDecimal;
 use deser_hjson;
 use serde::{Deserialize, Serialize};
@@ -123,7 +124,7 @@ fn prohibit_number_values(value: &serde_json::Value) {
 
 #[derive(Serialize, Deserialize)]
 pub struct AccountingPeriodInfo {
-	pub name: String,
+	pub name: YearQuarter,
 	pub previous_period: Option<String>,
 	pub is_initial: Option<bool>,
 	pub recoupments: Vec<Recoupment>,

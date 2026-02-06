@@ -3,8 +3,6 @@ use clap::{Args, Parser, Subcommand};
 use project::Project;
 use std::path::PathBuf;
 
-use crate::generator::generate;
-
 mod accounting;
 mod generator;
 mod manifest;
@@ -82,13 +80,13 @@ fn main() -> Result<()> {
 	}
 
 	let mut project = Project::load(PathBuf::from(manifest_path))?;
-	project.verify()?;
+	project.validate()?;
 
 	match args.command {
 		Commands::Migrate(_) => {}
 
 		Commands::Generate(args) => {
-			project.generate();
+			generator::generate_all_open(&mut project)?;
 			// let accounting_period = project
 			// 	.get_accounting_period(&args.accounting_period_name)
 			// 	.context("Accounting period from argument not found")?;

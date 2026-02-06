@@ -1,212 +1,242 @@
 use crate::{
-	accounting::{Entry, EntryKind, Voucher},
-	manifest::Track,
-	project::{AccountingPeriod, Project},
-	project_data::AccountingPeriodResult,
+	accounting::{AccountId, Entry, Voucher},
+	project::{Project, YearQuarter},
+	project_data::{pct_to_factor, AccountingPeriodResult},
 	track_sales_report::TrackSalesReport,
 };
-use anyhow::{ensure, Context, Result};
-use bigdecimal::BigDecimal;
+use anyhow::{Context, Result};
+use bigdecimal::{BigDecimal, Zero};
 
-pub fn generate(project: &mut Project) -> Result<()> {
-	let open_periods: Vec<_> = project
+pub fn generate_all_open(project: &mut Project) -> Result<()> {
+	let open_pnames: Vec<_> = project
 		.accounting_periods
 		.iter()
-		.filter(|p| !project.data.accounts.is_period_closed(&p.name))
+		.filter(|p| {
+			let result = project.data.get_accounting_result(&p.name);
+			let is_locked = result.map(|r| r.is_locked).unwrap_or(false);
+			!is_locked
+		})
+		.map(|period| period.name.clone())
 		.collect();
 
-	if open_periods.is_empty() {
+	if open_pnames.is_empty() {
 		println!("No open periods to process. All periods are closed.");
 		return Ok(());
 	}
-	println!("Processing {} open period(s)", open_periods.len());
+	println!("Processing {} open period(s)", open_pnames.len());
 
 	// 4. Process each open period
-	for period in open_periods {
-		println!("Processing period: {}", period.name);
-		process_period(&mut project, &period)?;
+	for pname in open_pnames {
+		println!("Processing period: {}", pname.to_string());
+		let new_result = generate(project, &pname)?;
 	}
 
 	println!("✓ Generation complete");
 	Ok(())
 }
 
-fn process_period(
-	project: &mut Project,
-	period: &AccountingPeriod,
-) -> Result<AccountingPeriodResult> {
-	let mut result = AccountingPeriodResult {
-		name: period.name.clone(),
-		is_closed: false,
-		is_initial: period.is_initial,
-		vouchers: Vec::new(),
-	};
-
+fn generate(project: &mut Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
+	let period = project.get_accounting_period(&pname).unwrap();
 	let sales_report = period.generate_sales_report();
 	let track_sales_report = sales_report.into_track_sales_report(&project);
+	let revenue_voucher = create_revenue_voucher(&track_sales_report, &pname, &mut *project)?;
 
-	let revenue_voucher = create_revenue_voucher(&mut *project, &period, &track_sales_report)?;
-	result.vouchers.push(revenue_voucher);
+	let recoupment_vouchers = create_recoupment_vouchers(&pname, &mut *project)?;
 
-	for (isrc, amount) in track_sales_report {
-		ensure!(amount != 0, "Track {isrc} has zero revenue. It's probably just an earnings adjustment, so this check can probably be removed");
-		let track_voucher = distribute_track_revenue(project, period, isrc, amount)?;
-		result.vouchers.push(track_voucher);
+	let period = project.get_accounting_period(&pname).unwrap();
+	let mut result = AccountingPeriodResult {
+		name: pname.clone(),
+		is_initial: period.is_initial,
+		is_locked: false,
+		revenue_voucher,
+		recoupment_vouchers,
+		track_distribution_vouchers: Vec::new(),
+		closing_revenue_balances: todo!(),
+		closing_recoupment_balances: todo!(),
+		closing_artist_balances: todo!(),
+	};
+
+	let mut track_distribution_vouchers = result.track_distribution_vouchers;
+	for (isrc, amount) in track_sales_report.tracks {
+		let voucher =
+			distribute_track_revenue(&mut result, &mut project, &isrc, &amount.gross_royalties)?;
+		track_distribution_vouchers.push(voucher);
 	}
 
 	Ok(result)
 }
 
 fn create_revenue_voucher(
-	project: &mut Project,
-	period: &AccountingPeriod,
 	track_sales_report: &TrackSalesReport,
+	pname: &YearQuarter,
+	project: &mut Project,
 ) -> Result<Voucher> {
-	let mut accounts = project.data.accounts;
-
-	let mut voucher = Voucher {
-		id: project.data.generate_voucher_id(),
-		date: period.end_date(),
-		entries: Vec::new(),
-		note: "Revenue".to_string(),
-	};
-
 	let revenue_entry = Entry {
-		account_id: accounts.get_revenue_account().id,
-		amount: track_sales_report
+		account: AccountId::Revenue,
+		amount: -track_sales_report
 			.tracks
 			.iter()
-			.map(|(_, t)| t.gross_royalties)
-			.sum(),
-		note: "".to_string(),
-		kind: EntryKind::Debit,
+			.map(|(_, t)| &t.gross_royalties)
+			.sum::<BigDecimal>(),
+		note: None,
 	};
-	voucher.entries.push(revenue_entry);
 
-	for (_, track) in track_sales_report.tracks {
-		let track_account_id = accounts.get_or_create_track_account(&track.isrc);
+	let mut entries = vec![revenue_entry];
+
+	for (_, track) in &track_sales_report.tracks {
+		let track_account_id = AccountId::Track(track.isrc.clone());
 		let track_entry = Entry {
-			account_id: track_account_id,
-			amount: track.gross_royalties,
-			note: format!(""),
-			kind: EntryKind::Credit,
+			account: track_account_id,
+			amount: track.gross_royalties.clone(),
+			note: None,
 		};
-		voucher.entries.push(track_entry);
+		entries.push(track_entry);
 	}
 
-	voucher.verify_balance()?;
+	let voucher = Voucher::new_validated(
+		project.data.generate_voucher_id(),
+		pname.end_date(),
+		entries,
+		None,
+	)?;
 	Ok(voucher)
 }
 
+fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Result<Vec<Voucher>> {
+	let mut recoupment_vouchers: Vec<Voucher> = Vec::new();
+	for track in &project.tracks {
+		let recoupment_manifest = match &track.recoupment {
+			Some(v) => v,
+			None => continue,
+		};
+		for recoupment in &recoupment_manifest.recoupments {
+			if pname.contains_date(&recoupment.date) {
+				let entries = vec![
+					Entry {
+						account: AccountId::RecoupmentTrack(track.main_isrc.clone()),
+						amount: -recoupment.recoup.clone(),
+						note: None,
+					},
+					Entry {
+						account: AccountId::Expense,
+						amount: recoupment.expense.clone(),
+						note: None,
+					},
+				];
+				let voucher = Voucher::new_validated(
+					project.data.generate_voucher_id(),
+					pname.end_date(),
+					entries,
+					None,
+				)?;
+				recoupment_vouchers.push(voucher);
+			}
+		}
+	}
+	for album in project.albums.values() {
+		let recoupment_manifest = match &album.recoupment {
+			Some(v) => v,
+			None => continue,
+		};
+		for recoupment in &recoupment_manifest.recoupments {
+			if pname.contains_date(&recoupment.date) {
+				let entries = vec![
+					Entry {
+						account: AccountId::RecoupmentAlbum(album.upc.clone()),
+						amount: -recoupment.recoup.clone(),
+						note: None,
+					},
+					Entry {
+						account: AccountId::Expense,
+						amount: recoupment.expense.clone(),
+						note: None,
+					},
+				];
+				let voucher = Voucher::new_validated(
+					project.data.generate_voucher_id(),
+					pname.end_date(),
+					entries,
+					None,
+				)?;
+				recoupment_vouchers.push(voucher);
+			}
+		}
+	}
+	Ok(recoupment_vouchers)
+}
+
 fn distribute_track_revenue(
+	result: &mut AccountingPeriodResult,
 	project: &mut Project,
-	period: &AccountingPeriod,
 	isrc: &str,
 	revenue: &BigDecimal,
 ) -> Result<Voucher> {
 	let track = project.get_track(isrc).context("Track not found")?;
 
-	let track_account_id = project.data.accounts.get_or_create_track_account(isrc);
-	let mut remaining = revenue.clone();
-
-	let album = project.get_album_containing_isrc(isrc.into());
-
-	// Recoup expenses if track has an expense account
-	if let Some(expense_account) = project.data.accounts.get_expense_account(isrc, &project) {
-		// Recoupments are assets, so they are negative
-		let expense_balance = expense_account
-			.account()
-			.closing_balance_at(project, period.end_date());
-	}
-
-	// Step 2: Distribute remaining to artists (considering label_share)
-	if remaining > BigDecimal::from(0) {
-		distribute_to_artists(project, period, track, isrc, &remaining)?;
-	}
-
-	Ok(())
-}
-
-fn calculate_expense_payment(available: &BigDecimal, track: &Track) -> Result<BigDecimal> {
-	// How much more can we recoup?
-	let remaining_to_recoup = track.max_recoup - already_recouped;
-
-	if remaining_to_recoup <= BigDecimal::from(0) {
-		// Already hit the recoup limit
-		return Ok(BigDecimal::from(0));
-	}
-
-	// Pay the minimum of: what's available, what remains to recoup
-	let payment = if available >= &remaining_to_recoup {
-		remaining_to_recoup
-	} else {
-		available.clone()
-	};
-
-	Ok(payment)
-}
-
-fn distribute_to_artists(
-	project: &mut Project,
-	period: &AccountingPeriod,
-	track: &Track,
-	isrc: &str,
-	amount: &BigDecimal,
-) -> Result<()> {
-	let track_account_id = project.data.accounts.get_or_create_track_account(isrc);
-
-	// Calculate label and artist shares
-	let label_share_pct = &track.label_share;
-	let artist_share_pct = BigDecimal::from(100) - label_share_pct;
-
-	let label_amount = amount * label_share_pct / BigDecimal::from(100);
-	let artist_pool = amount * &artist_share_pct / BigDecimal::from(100);
-
 	let mut entries = Vec::new();
 
-	// Debit from track account (total going out)
+	let track_account_id = AccountId::Track(isrc.to_string());
+	track_account_id.validate()?;
 	entries.push(Entry {
-		account_id: track_account_id,
-		amount: amount.clone(),
-		note: format!("Distribution for {}", track.title),
-		kind: EntryKind::Debit,
+		account: track_account_id,
+		amount: -revenue.clone(),
+		note: None,
 	});
 
-	// Credit to label
-	if label_amount > BigDecimal::from(0) {
-		let label_account_id = project.data.accounts.get_or_create_label_account();
-		entries.push(Entry {
-			account_id: label_account_id,
-			amount: label_amount.clone(),
-			note: format!("{}% label share for {}", label_share_pct, track.title),
-			kind: EntryKind::Credit,
+	let mut remaining = revenue.clone();
+
+	// Recoup recoupable expenses
+	let recoupment_balance = result
+		.get_recoupment_account_associated_with_track(&isrc, &project)
+		.and_then(|recoupment_account| {
+			result.get_closing_recoupment_balance(&recoupment_account, &project)
 		});
+	if let Some(recoupment_balance) = recoupment_balance {
+		match recoupment_balance.account {
+			AccountId::Track(_) => {
+				// Recoupment balance is negative because it's a future receivable amount
+				let recoupables = -recoupment_balance.amount;
+				if remaining > 0 && recoupables > 0 {
+					let amount_to_recoup = BigDecimal::min(remaining.clone(), recoupables);
+					remaining -= &amount_to_recoup;
+					entries.push(Entry {
+						account: AccountId::RecoupmentTrack(isrc.to_string()),
+						amount: amount_to_recoup,
+						note: None,
+					});
+				}
+			}
+			AccountId::RecoupmentAlbum(_) => todo!("Album recoupment not implemented yet"),
+			_ => panic!(),
+		};
 	}
 
-	// Credit to each artist based on their split of the artist pool
-	for split in &track.splits {
-		let artist_amount = &artist_pool * &split.share / BigDecimal::from(100);
-		let artist_account_id = project
-			.data
-			.accounts
-			.get_or_create_artist_account(&split.name);
+	let splittable_royalties = remaining;
 
+	// Allow both positive royalties and negative royalty adjustments
+	if splittable_royalties != BigDecimal::zero() {
+		// Distribute remaining to artists and label
 		entries.push(Entry {
-			account_id: artist_account_id,
-			amount: artist_amount,
-			note: format!("{}% artist split for {}", split.share, track.title),
-			kind: EntryKind::Credit,
+			account: AccountId::LabelRoyalty,
+			amount: splittable_royalties.clone() * pct_to_factor(&track.label_share),
+			note: None,
 		});
+		let artists_share = BigDecimal::from(100) - &track.label_share;
+		let artists_splittable_royalties = splittable_royalties * artists_share;
+		for split in &track.splits {
+			entries.push(Entry {
+				account: AccountId::Artist(split.name.clone()),
+				amount: &artists_splittable_royalties * pct_to_factor(&split.share),
+				note: None,
+			})
+		}
 	}
 
-	let voucher = Voucher::new(
-		project.data.generate_voucher_id(),
-		period.end_date(),
+	let voucher = Voucher {
+		id: project.data.generate_voucher_id(),
+		date: result.end_date(),
 		entries,
-		format!("Artist/Label distribution for ISRC {}", isrc),
-	)?;
-
-	project.data.add_voucher(&period.name, voucher)?;
-
-	Ok(())
+		note: None,
+	};
+	Ok(voucher)
 }

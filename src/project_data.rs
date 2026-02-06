@@ -1,9 +1,9 @@
-use crate::accounting::{Accounts, Voucher};
-use crate::project::{AccountingPeriod, Project};
+use crate::accounting::{sum_account_vouchers, AccountId, Balance, Voucher};
+use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
-use crate::track_sales_report::TrackSalesReport;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Signed, Zero};
+use bigdecimal::{BigDecimal, Zero};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
+pub fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 	share * BigDecimal::from_str("0.01").unwrap()
 }
 
@@ -19,7 +19,6 @@ fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 #[serde(deny_unknown_fields)]
 pub struct AccountingData {
 	pub last_voucher_id: u32,
-	pub accounts: Accounts,
 	pub accounting_period_results: Vec<AccountingPeriodResult>,
 }
 impl AccountingData {
@@ -28,7 +27,7 @@ impl AccountingData {
 		Ok(serde_json::from_str(&internal_data_str).unwrap())
 	}
 
-	pub fn verify(&self, project: &Project) -> Result<()> {
+	pub fn validate(&self, project: &Project) -> Result<()> {
 		let accounting_periods = &project.accounting_periods;
 		let result_periods = &self.accounting_period_results;
 		for (sales_period, result) in accounting_periods.iter().zip(result_periods) {
@@ -46,10 +45,10 @@ impl AccountingData {
 		Ok(())
 	}
 
-	pub fn get_accounting_result(&self, name: &str) -> Option<&AccountingPeriodResult> {
+	pub fn get_accounting_result(&self, name: &YearQuarter) -> Option<&AccountingPeriodResult> {
 		self.accounting_period_results
 			.iter()
-			.find(|accounting_period| accounting_period.name == name)
+			.find(|accounting_period| &accounting_period.name == name)
 	}
 
 	pub fn save(&self, data_file_path: &PathBuf) -> Result<()> {
@@ -78,213 +77,274 @@ pub fn sorted_map<S: Serializer, K: Serialize + Ord, V: Serialize>(
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct AccountingPeriodResult {
-	pub name: String,
+	pub name: YearQuarter,
 	pub is_initial: bool,
-	pub is_closed: bool,
-	pub vouchers: Vec<Voucher>,
+	pub is_locked: bool,
+	pub revenue_voucher: Voucher,
+	pub recoupment_vouchers: Vec<Voucher>,
+	pub track_distribution_vouchers: Vec<Voucher>,
+	pub closing_revenue_balances: HashMap<String, BigDecimal>,
+	pub closing_recoupment_balances: HashMap<String, BigDecimal>,
+	pub closing_artist_balances: HashMap<String, BigDecimal>,
 }
 
 impl AccountingPeriodResult {
-	pub fn generate(
-		period: &AccountingPeriod,
-		project: &Project,
-	) -> Result<AccountingPeriodResult> {
-		let sales_report = period.generate_sales_report();
-		let track_sales_report = sales_report.into_track_sales_report(&project);
-		let track_statements =
-			Self::generate_track_statements(track_sales_report, period, project)?;
-		let artist_statements =
-			Self::generate_artist_statements(&track_statements, period, &project)?;
-		Ok(AccountingPeriodResult {
-			name: period.name.clone(),
-			is_initial: period.is_initial,
-			track_statements,
-			artist_statements,
-		})
-	}
-	fn generate_track_statements(
-		track_sales_report: TrackSalesReport,
-		period: &AccountingPeriod,
-		project: &Project,
-	) -> Result<TrackStatementsMap> {
-		let new_recoupable_costs = period.recoupable_costs_by_track(project)?;
-
-		let previous_net_amounts: HashMap<String, BigDecimal> = match &period.is_initial {
-			true => HashMap::new(),
-			false => {
-				let previous_period = period.prev_period();
-				let previous_result = project
-					.data
-					.get_accounting_result(&previous_period)
-					.context("Could not find result from previous period \"{previous_period}\"")?;
-				previous_result
-					.track_statements
-					.iter()
-					.map(|(isrc, track_statement)| {
-						(isrc.clone(), track_statement.net_amount.clone())
-					})
-					.collect()
-			}
-		};
-
-		// Add previous costs
-		let mut statements: TrackStatementsMap = previous_net_amounts
-			.into_iter()
-			.map(|(isrc, previous_net_amounts)| {
-				let mut statement = TrackStatement::default();
-				statement.opening_net_amount = previous_net_amounts;
-				statement.isrc = isrc.clone();
-				(isrc, statement)
-			})
-			.collect();
-
-		// Add new costs
-		for new_recoupable_costs in new_recoupable_costs.into_values() {
-			let statement = statements
-				.entry(new_recoupable_costs.isrc.clone())
-				.or_insert_with(|| TrackStatement {
-					isrc: new_recoupable_costs.isrc.clone(),
-					..Default::default()
-				});
-			statement.new_costs = new_recoupable_costs.recoup;
+	pub fn prev_result<'a>(&self, project: &'a Project) -> Option<&'a AccountingPeriodResult> {
+		let prev_name = self.name.get_prev();
+		if self.is_initial {
+			return None;
 		}
-
-		// Add track statements for everything in the sales report
-		for (isrc, sales_info) in track_sales_report.tracks {
-			let statement = statements.entry(isrc).or_default();
-
-			let opening_net_amount = statement.opening_net_amount.clone();
-			let gross_royalties = sales_info.gross_royalties;
-			let new_costs = statement.new_costs.clone();
-
-			*statement = TrackStatement {
-				isrc: "".to_string(),
-				title: "".to_string(),
-				opening_net_amount,
-				gross_royalties,
-				new_costs,
-				net_amount: BigDecimal::zero(),
-			};
-		}
-
-		// Fill in remaining fields for all elements
-		for (isrc, statement) in &mut statements {
-			let track = project.get_track(&isrc).unwrap();
-			statement.isrc = track.main_isrc.clone();
-			statement.net_amount = statement.opening_net_amount.clone()
-				+ statement.gross_royalties.clone()
-				- statement.new_costs.clone();
-			statement.title = track.title.clone();
-
-			ensure!(isrc != "");
-			ensure!(isrc == statement.isrc.as_str());
-		}
-
-		Ok(statements)
-	}
-	fn generate_artist_statements(
-		track_statements: &TrackStatementsMap,
-		period: &AccountingPeriod,
-		project: &Project,
-	) -> Result<ArtistStatementsMap> {
-		let mut artist_statements: ArtistStatementsMap = HashMap::new();
-
-		for track_statement in track_statements.values() {
-			let track = project.get_track(&track_statement.isrc).unwrap();
-			let artists_share = BigDecimal::from(100) - &track.label_share;
-			for split in &track.splits {
-				let artist_statement =
-					artist_statements
-						.entry(split.name.clone())
-						.or_insert_with(|| {
-							return ArtistStatement {
-								net_royalties: BigDecimal::zero(),
-								tracks: vec![],
-							};
-						});
-				let total_artist_split =
-					pct_to_factor(&artists_share) * pct_to_factor(&split.share);
-				let artist_track_statement = ArtistTrackStatement {
-					isrc: track_statement.isrc.clone(),
-					net_royalties: track_statement.payable() * total_artist_split,
-				};
-				if artist_track_statement.net_royalties.is_positive() {
-					artist_statement.net_royalties += artist_track_statement.net_royalties.clone();
-				}
-				artist_statement.tracks.push(artist_track_statement);
-				// sort tracks for determinism
-				artist_statement.tracks.sort_unstable_by(|a, b| {
-					// net royalties (descending)
-					b.net_royalties
-						.cmp(&a.net_royalties)
-						.then_with(|| a.isrc.cmp(&b.isrc))
-						.then_with(|| panic!("Duplicate ISRCs in artist statement"))
-				})
-			}
-		}
-
-		// Add statements for artists that have past statements, but no track royalties this period
-		if !period.is_initial {
-			let previous_result = project
+		Some(
+			project
 				.data
-				.get_accounting_result(&period.prev_period())
-				.unwrap();
-			for (name, _statement) in previous_result.artist_statements.iter() {
-				artist_statements
-					.entry(name.clone())
-					.or_insert(ArtistStatement {
-						net_royalties: BigDecimal::zero(),
-						tracks: vec![],
-					});
+				.get_accounting_result(&prev_name)
+				.expect("Could not find previous result"),
+		)
+	}
+	pub fn end_date(&self) -> NaiveDate {
+		self.name.end_date()
+	}
+	pub fn get_closing_recoupment_balance(
+		&self,
+		account: &AccountId,
+		project: &Project,
+	) -> Option<Balance> {
+		let prev_closing_balance = self.prev_result(project).and_then(|prev_result| {
+			prev_result
+				.closing_recoupment_balances
+				.get(&account.recoupment_account_id())
+				.cloned()
+		});
+		let balance_change = sum_account_vouchers(account, &self.recoupment_vouchers);
+		if prev_closing_balance.is_some() || balance_change.is_some() {
+			Some(Balance {
+				account: account.clone(),
+				amount: prev_closing_balance.unwrap_or_default()
+					+ balance_change.unwrap_or_default(),
+			})
+		} else {
+			None
+		}
+	}
+	pub fn get_recoupment_account_associated_with_track(
+		&self,
+		isrc: &str,
+		project: &Project,
+	) -> Option<AccountId> {
+		let track = project.get_track(isrc).unwrap();
+
+		let album = project.get_album_containing_isrc(isrc);
+		let album_recoupment = album.map(|album| album.recoupment.is_some());
+
+		match (&track.recoupment, album_recoupment) {
+			(Some(_), None) => Some(AccountId::RecoupmentTrack(track.main_isrc.clone())),
+			(None, Some(_)) => Some(AccountId::RecoupmentAlbum(album.unwrap().upc.clone())),
+			(None, None) => None,
+			(Some(_), Some(_)) => {
+				panic!("Track {isrc} has both track and album recoupment accounts")
 			}
 		}
+	}
+	// pub fn generate(
+	// 	period: &AccountingPeriod,
+	// 	project: &Project,
+	// ) -> Result<AccountingPeriodResult> {
+	// 	let sales_report = period.generate_sales_report();
+	// 	let track_sales_report = sales_report.into_track_sales_report(&project);
+	// 	let track_statements =
+	// 		Self::generate_track_statements(track_sales_report, period, project)?;
+	// 	let artist_statements =
+	// 		Self::generate_artist_statements(&track_statements, period, &project)?;
+	// 	Ok(AccountingPeriodResult {
+	// 		name: period.name.clone(),
+	// 		is_initial: period.is_initial,
+	// 		track_statements,
+	// 		artist_statements,
+	// 	})
+	// }
+	// fn generate_track_statements(
+	// 	track_sales_report: TrackSalesReport,
+	// 	period: &AccountingPeriod,
+	// 	project: &Project,
+	// ) -> Result<TrackStatementsMap> {
+	// 	let new_recoupable_costs = period.recoupable_costs_by_track(project)?;
 
-		Ok(artist_statements)
-	}
-	pub fn export(&self) -> Export {
-		let mut artist_statements: Vec<_> = self
-			.artist_statements
-			.iter()
-			.map(|(payee, statement)| {
-				let mut tracks: Vec<_> = statement
-					.tracks
-					.iter()
-					.map(|ats| {
-						let track_statement = self.track_statements.get(&ats.isrc).unwrap();
-						let payable = track_statement.payable();
-						return ArtistTrackStatementExport {
-							isrc: ats.isrc.clone(),
-							title: track_statement.title.clone(),
-							gross_royalties: track_statement.gross_royalties.clone(),
-							payable_royalties: payable.clone(),
-							net_royalties: ats.net_royalties.clone(),
-						};
-					})
-					.collect();
-				tracks.sort_by(|a, b| {
-					b.net_royalties
-						.cmp(&a.net_royalties)
-						.then_with(|| a.isrc.cmp(&b.isrc))
-						.then_with(|| panic!("Sort duplicate artist statement track"))
-				});
-				return ArtistStatementExport {
-					payee: payee.clone(),
-					net_royalties: statement.net_royalties.to_string(),
-					tracks,
-				};
-			})
-			.collect();
-		artist_statements.sort_by(|a, b| {
-			numeric_sort::cmp(&b.net_royalties, &a.net_royalties)
-				.then_with(|| numeric_sort::cmp(&b.payee, &a.payee))
-				.then_with(|| panic!("Sort duplicate artist statement"))
-		});
-		Export {
-			name: self.name.clone(),
-			is_initial: self.is_initial,
-			artist_statements,
-		}
-	}
+	// 	let previous_net_amounts: HashMap<String, BigDecimal> = match &period.is_initial {
+	// 		true => HashMap::new(),
+	// 		false => {
+	// 			let previous_period = period.prev_period();
+	// 			let previous_result = project
+	// 				.data
+	// 				.get_accounting_result(&previous_period)
+	// 				.context("Could not find result from previous period \"{previous_period}\"")?;
+	// 			previous_result
+	// 				.track_statements
+	// 				.iter()
+	// 				.map(|(isrc, track_statement)| {
+	// 					(isrc.clone(), track_statement.net_amount.clone())
+	// 				})
+	// 				.collect()
+	// 		}
+	// 	};
+
+	// 	// Add previous costs
+	// 	let mut statements: TrackStatementsMap = previous_net_amounts
+	// 		.into_iter()
+	// 		.map(|(isrc, previous_net_amounts)| {
+	// 			let mut statement = TrackStatement::default();
+	// 			statement.opening_net_amount = previous_net_amounts;
+	// 			statement.isrc = isrc.clone();
+	// 			(isrc, statement)
+	// 		})
+	// 		.collect();
+
+	// 	// Add new costs
+	// 	for new_recoupable_costs in new_recoupable_costs.into_values() {
+	// 		let statement = statements
+	// 			.entry(new_recoupable_costs.isrc.clone())
+	// 			.or_insert_with(|| TrackStatement {
+	// 				isrc: new_recoupable_costs.isrc.clone(),
+	// 				..Default::default()
+	// 			});
+	// 		statement.new_costs = new_recoupable_costs.recoup;
+	// 	}
+
+	// 	// Add track statements for everything in the sales report
+	// 	for (isrc, sales_info) in track_sales_report.tracks {
+	// 		let statement = statements.entry(isrc).or_default();
+
+	// 		let opening_net_amount = statement.opening_net_amount.clone();
+	// 		let gross_royalties = sales_info.gross_royalties;
+	// 		let new_costs = statement.new_costs.clone();
+
+	// 		*statement = TrackStatement {
+	// 			isrc: "".to_string(),
+	// 			title: "".to_string(),
+	// 			opening_net_amount,
+	// 			gross_royalties,
+	// 			new_costs,
+	// 			net_amount: BigDecimal::zero(),
+	// 		};
+	// 	}
+
+	// 	// Fill in remaining fields for all elements
+	// 	for (isrc, statement) in &mut statements {
+	// 		let track = project.get_track(&isrc).unwrap();
+	// 		statement.isrc = track.main_isrc.clone();
+	// 		statement.net_amount = statement.opening_net_amount.clone()
+	// 			+ statement.gross_royalties.clone()
+	// 			- statement.new_costs.clone();
+	// 		statement.title = track.title.clone();
+
+	// 		ensure!(isrc != "");
+	// 		ensure!(isrc == statement.isrc.as_str());
+	// 	}
+
+	// 	Ok(statements)
+	// }
+	// fn generate_artist_statements(
+	// 	track_statements: &TrackStatementsMap,
+	// 	period: &AccountingPeriod,
+	// 	project: &Project,
+	// ) -> Result<ArtistStatementsMap> {
+	// 	let mut artist_statements: ArtistStatementsMap = HashMap::new();
+
+	// 	for track_statement in track_statements.values() {
+	// 		let track = project.get_track(&track_statement.isrc).unwrap();
+	// 		let artists_share = BigDecimal::from(100) - &track.label_share;
+	// 		for split in &track.splits {
+	// 			let artist_statement =
+	// 				artist_statements
+	// 					.entry(split.name.clone())
+	// 					.or_insert_with(|| {
+	// 						return ArtistStatement {
+	// 							net_royalties: BigDecimal::zero(),
+	// 							tracks: vec![],
+	// 						};
+	// 					});
+	// 			let total_artist_split =
+	// 				pct_to_factor(&artists_share) * pct_to_factor(&split.share);
+	// 			let artist_track_statement = ArtistTrackStatement {
+	// 				isrc: track_statement.isrc.clone(),
+	// 				net_royalties: track_statement.payable() * total_artist_split,
+	// 			};
+	// 			if artist_track_statement.net_royalties.is_positive() {
+	// 				artist_statement.net_royalties += artist_track_statement.net_royalties.clone();
+	// 			}
+	// 			artist_statement.tracks.push(artist_track_statement);
+	// 			// sort tracks for determinism
+	// 			artist_statement.tracks.sort_unstable_by(|a, b| {
+	// 				// net royalties (descending)
+	// 				b.net_royalties
+	// 					.cmp(&a.net_royalties)
+	// 					.then_with(|| a.isrc.cmp(&b.isrc))
+	// 					.then_with(|| panic!("Duplicate ISRCs in artist statement"))
+	// 			})
+	// 		}
+	// 	}
+
+	// 	// Add statements for artists that have past statements, but no track royalties this period
+	// 	if !period.is_initial {
+	// 		let previous_result = project
+	// 			.data
+	// 			.get_accounting_result(&period.prev_period())
+	// 			.unwrap();
+	// 		for (name, _statement) in previous_result.artist_statements.iter() {
+	// 			artist_statements
+	// 				.entry(name.clone())
+	// 				.or_insert(ArtistStatement {
+	// 					net_royalties: BigDecimal::zero(),
+	// 					tracks: vec![],
+	// 				});
+	// 		}
+	// 	}
+
+	// 	Ok(artist_statements)
+	// }
+	// pub fn export(&self) -> Export {
+	// 	let mut artist_statements: Vec<_> = self
+	// 		.artist_statements
+	// 		.iter()
+	// 		.map(|(payee, statement)| {
+	// 			let mut tracks: Vec<_> = statement
+	// 				.tracks
+	// 				.iter()
+	// 				.map(|ats| {
+	// 					let track_statement = self.track_statements.get(&ats.isrc).unwrap();
+	// 					let payable = track_statement.payable();
+	// 					return ArtistTrackStatementExport {
+	// 						isrc: ats.isrc.clone(),
+	// 						title: track_statement.title.clone(),
+	// 						gross_royalties: track_statement.gross_royalties.clone(),
+	// 						payable_royalties: payable.clone(),
+	// 						net_royalties: ats.net_royalties.clone(),
+	// 					};
+	// 				})
+	// 				.collect();
+	// 			tracks.sort_by(|a, b| {
+	// 				b.net_royalties
+	// 					.cmp(&a.net_royalties)
+	// 					.then_with(|| a.isrc.cmp(&b.isrc))
+	// 					.then_with(|| panic!("Sort duplicate artist statement track"))
+	// 			});
+	// 			return ArtistStatementExport {
+	// 				payee: payee.clone(),
+	// 				net_royalties: statement.net_royalties.to_string(),
+	// 				tracks,
+	// 			};
+	// 		})
+	// 		.collect();
+	// 	artist_statements.sort_by(|a, b| {
+	// 		numeric_sort::cmp(&b.net_royalties, &a.net_royalties)
+	// 			.then_with(|| numeric_sort::cmp(&b.payee, &a.payee))
+	// 			.then_with(|| panic!("Sort duplicate artist statement"))
+	// 	});
+	// 	Export {
+	// 		name: self.name.clone(),
+	// 		is_initial: self.is_initial,
+	// 		artist_statements,
+	// 	}
+	// }
 }
 
 #[derive(Serialize)]

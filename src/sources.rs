@@ -47,7 +47,9 @@ impl Source {
 						if !Path::exists(&source.file_path) {
 							panic!(
 								"File not found: {:?}. From {} {}",
-								source.file_path, manifest.name, platform
+								source.file_path,
+								manifest.name.to_string(),
+								platform
 							);
 						}
 						source

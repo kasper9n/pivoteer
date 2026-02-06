@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::project::YearQuarter;
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -63,7 +65,7 @@ fn prohibit_number_values(value: &serde_json::Value) {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AccountingPeriodManifest {
-	pub name: String,
+	pub name: YearQuarter,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub is_initial: Option<bool>,
 	#[serde(flatten)]
@@ -144,7 +146,7 @@ pub struct RecoupmentManifest {
 	pub recoupments: Vec<RecoupableCost>,
 }
 impl RecoupmentManifest {
-	pub fn verify(&self, max_recoup: &BigDecimal) -> Result<()> {
+	pub fn validate(&self, max_recoup: &BigDecimal) -> Result<()> {
 		let mut total_recoup = BigDecimal::from(0);
 		let mut total_expenses = BigDecimal::from(0);
 		for recoupment in &self.recoupments {

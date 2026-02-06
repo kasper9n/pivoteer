@@ -1,4 +1,4 @@
-use crate::project::{Project, SalesReport};
+use crate::project::{Project, SalesReport, YearQuarter};
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ pub struct TrackSalesReportRow {
 pub struct TrackSalesReport {
 	pub tracks: HashMap<String, TrackSalesReportRow>,
 	#[allow(unused)]
-	pub accounting_period_name: String,
+	pub accounting_period_name: YearQuarter,
 }
 
 impl TrackSalesReport {
@@ -27,7 +27,8 @@ impl TrackSalesReport {
 				Some(val) => val,
 				None => panic!(
 					"No track with ISRC {}. Was scanning sales report {}",
-					unmapped_isrc, sales_report.accounting_period_name
+					unmapped_isrc,
+					sales_report.accounting_period_name.to_string()
 				),
 			};
 			let track_report = tracks_map

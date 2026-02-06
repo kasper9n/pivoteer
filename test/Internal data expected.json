@@ -1,86 +1,63 @@
 {
-	"accounts": {
-		"revenue": {
-			"id": "revenue",
-			"name": "revenue",
-			"kind": "Revenue",
-		},
-		"track:A": {
-			"id": "track:A",
-			"name": "track:A",
-			"kind": "TrackAsset",
-		},
-		"expense:isrc:A": {
-			"id": "expense:isrc:A",
-			"name": "expense:isrc:A",
-			"kind": "Expense",
-		},
-		"artist:Salvatore Ganacci": {
-			"id": "artist:Salvatore Ganacci",
-			"name": "artist:Salvatore Ganacci",
-			"kind": "ArtistLiability",
-		},
-	},
 	"accounting_period_results": [
 		{
-			"last_voucher_id": 0,
-			"vouchers": [
-				{
-					"id": 0,
-					"date": "2026-03-31",
-					"entries": [
-						{ "account_id": "revenue", "amount": "-100" },
-						{ "account_id": "track:A", "amount": "100" },
-					],
-				},
-				{
-					"id": 1,
-					"date": "2026-03-31",
-					"entries": [
-						{ "account_id": "track:A", "amount": "-100" },
-						{ "account_id": "recoupment:track:A", "amount": "50" },
-						{ "account_id": "artist:Salvatore Ganacci", "amount": "50" },
-					],
-				}
+			"name": "1999 Q1",
+			"is_initial": true,
+			"is_locked": true,
+			"revenue_voucher": [
+				{ "account": "revenue", "amount": "0" },
+			},
+			"recoupment_vouchers": [
+				{ "account": "recoupment:track:A", "amount": "-30" },
+				{ "account": "recoupment_expense", "amount": "30" },
 			],
+			"track_distribution_vouchers": {
+				"A": [
+					{ "account": "track:A", "amount": "0" },
+					{ "account": "recoupment:track:A", "amount": "0" },
+					{ "account": "artist:Salvatore Ganacci", "amount": "0" },
+				],
+			},
+			"closing_revenue_balances": {
+				"revenue": "0",
+			},
+			"closing_recoupment_balances": {
+				"track:A": "-30",
+			},
+			"closing_artist_balances": {
+				"Salvatore Ganacci": "0",
+			},
 		},
 		{
 			"name": "1999 Q2",
+			"is_initial": false,
 			"is_locked": false,
-			"track_statements": {
-				// Roylties are income from someone else, so they have negative balances
-				"A": {
-					"title": "Salvatore Ganacci - Fight Dirty",
-					// opening royalties: 30
-					"new_royalties": "-100",
-					"closing_royalties": "-100",
-					"new_recouped": "20",
-					"new_artist_net_royalties": "0",
-				}
+			"revenue_voucher": [
+				{ "account": "revenue", "amount": "-100" },
+				{ "account": "track:A", "amount": "100" },
 			},
-			"recoupment_accounts": {
-				// Recoupables have positive balances
-				// Recoupables are future incomes, so they have positive balances
-				"upc_1": {
-					// opening balance: 100
-					"new_recoupables": "50",
-					"new_recouped": "-20",
-					"closing_balance": "130"
-				}
+			"recoupment_vouchers": [
+				{
+					{ "account": "recoupment:track:A", "amount": "-10" },
+					{ "account": "expense", "amount": "10" },
+				},
+			],
+			"track_distribution_vouchers": {
+				"A": [
+					{ "account": "track:A", "amount": "-100" },
+					{ "account": "recoupment:track:A", "amount": "40" },
+					{ "account": "artist:Salvatore Ganacci", "amount": "60" },
+				],
 			},
-			"artist_net_royalties": {
-				// Artist accounts are positive. This is an expense account (an amount that the artists "own"), not debt to the artists (debt would've been negative)
-				"Salvatore Ganacci": {
-					// opening_net_royalties: 0
-					"new_net_royalties": "0",
-					"tracks": [
-						{
-							"isrc": "A",
-							"net_royalties": "0.00"
-						}
-					]
-				}
-			}
-		}
+			"closing_revenue_balances": {
+				"revenue": "-100",
+			},
+			"closing_recoupment_balances": {
+				"track:A": "0",
+			},
+			"closing_artist_balances": {
+				"Salvatore Ganacci": "60",
+			},
+		},
 	]
 }

@@ -1,18 +1,16 @@
-use crate::accounting::Accounts;
 use crate::generator;
 use crate::manifest::{
-	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupableCost, RecoupmentManifest, Track,
+	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, Track,
 };
-use crate::manifest_old::Recoupment;
-use crate::project_data::{AccountingPeriodResult, AccountingData};
+use crate::project_data::{AccountingData, AccountingPeriodResult};
 use crate::sources::{parse_date, Source};
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::BigDecimal;
-use chrono::Datelike;
+use chrono::NaiveDate;
 use csv_pipeline::{Pipeline, Transformer};
-use rayon::prelude::;
-use serde::Deserialize;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -24,12 +22,12 @@ pub struct Project {
 	pub accounting_periods: Vec<AccountingPeriod>,
 	pub data: AccountingData,
 	/// We use a vec because multiple ISRCs can point to the same Track
-	tracks: Vec<Track>,
+	pub tracks: Vec<Track>,
 	isrcs: HashMap<String, usize>,
-	albums: HashMap<String, Album>,
+	pub albums: HashMap<String, Album>,
 }
 impl Project {
-	pub fn load(manifest_path: PathBuf) -> Self {
+	pub fn load(manifest_path: PathBuf) -> Result<Self> {
 		let project_dir = manifest_path.parent().unwrap().to_owned();
 		let manifest = Manifest::from_path(manifest_path);
 		let accounting_periods = manifest
@@ -50,14 +48,14 @@ impl Project {
 			// Insert track ISRCs into track_map
 			for isrc in track.isrcs() {
 				match track_map.entry(isrc.clone()) {
-					Entry::Occupied(_) => panic!("Duplicate ISRC found: {isrc}"),
+					Entry::Occupied(_) => bail!("Duplicate ISRC found: {isrc}"),
 					Entry::Vacant(entry) => entry.insert(i),
 				};
 			}
 			// Insert track singles into album_map (single_upc)
 			for single_upc in &track.single_upcs {
 				match album_map.entry(single_upc.clone()) {
-					Entry::Occupied(_) => panic!("Duplicate UPC found: {single_upc}"),
+					Entry::Occupied(_) => bail!("Duplicate UPC found: {single_upc}"),
 					Entry::Vacant(entry) => entry.insert(Album {
 						upc: single_upc.clone(),
 						title: track.title.clone(),
@@ -77,7 +75,7 @@ impl Project {
 			};
 			let upc = album.upc.clone();
 			match album_map.entry(album.upc.clone()) {
-				Entry::Occupied(_) => panic!("Duplicate UPC found: {upc}"),
+				Entry::Occupied(_) => bail!("Duplicate UPC found: {upc}"),
 				Entry::Vacant(entry) => entry.insert(album),
 			};
 		}
@@ -87,27 +85,27 @@ impl Project {
 			.context("Failed to open internal data file")
 			.unwrap();
 
-		Project {
+		Ok(Project {
 			data_file_path,
 			accounting_periods,
 			data,
 			tracks: all_tracks,
 			isrcs: track_map,
 			albums: album_map,
-		}
+		})
 	}
-	pub fn verify(&self) -> Result<()> {
+	pub fn validate(&self) -> Result<()> {
 		if !Path::exists(&self.data_file_path) {
 			bail!("Internal data file not found: {:?}", self.data_file_path);
 		}
-		self.verify_accounting_periods()?;
-		self.verify_tracks()?;
-		self.verify_albums()?;
-		self.verify_sources()?;
-		self.data.verify(self)?;
+		self.validate_accounting_periods()?;
+		self.validate_tracks()?;
+		self.validate_albums()?;
+		self.validate_sources()?;
+		self.data.validate(self)?;
 		Ok(())
 	}
-	fn verify_sources(&self) -> Result<()> {
+	fn validate_sources(&self) -> Result<()> {
 		let mut paths = HashSet::new();
 		for accounting_period in &self.accounting_periods {
 			for source in &accounting_period.sources {
@@ -122,7 +120,7 @@ impl Project {
 		}
 		Ok(())
 	}
-	fn verify_tracks(&self) -> Result<()> {
+	fn validate_tracks(&self) -> Result<()> {
 		for track in &self.tracks {
 			let summed_artist_shares = track
 				.splits
@@ -142,13 +140,13 @@ impl Project {
 
 			if let Some(track_recoupment) = &track.recoupment {
 				track_recoupment
-					.verify(&track.max_recoup)
+					.validate(&track.max_recoup)
 					.context(format!("Invalid recoupment for {}", track.title))?;
 			}
 		}
 		Ok(())
 	}
-	fn verify_albums(&self) -> Result<()> {
+	fn validate_albums(&self) -> Result<()> {
 		for (upc, album) in &self.albums {
 			ensure!(!album.isrcs.is_empty(), "Empty album {upc}");
 
@@ -175,12 +173,12 @@ impl Project {
 			}
 
 			if let Some(album_recoupment) = &album.recoupment {
-				album_recoupment.verify(max_recoup)?;
+				album_recoupment.validate(max_recoup)?;
 			}
 		}
 		Ok(())
 	}
-	fn verify_accounting_periods(&self) -> Result<()> {
+	fn validate_accounting_periods(&self) -> Result<()> {
 		if self.accounting_periods.is_empty() {
 			bail!("No accounting periods found")
 		}
@@ -197,25 +195,27 @@ impl Project {
 				ensure!(
 					next_accounting_period.prev_period() == accounting_period.name.clone(),
 					"Accounting period \"{}\" has unexpected previous period \"{:?}\"",
-					accounting_period.name,
+					accounting_period.name.to_string(),
 					next_accounting_period.prev_period(),
 				)
 			}
 		}
 		Ok(())
 	}
-	pub fn generate(project:&mut Project) -> Result<()> {
-		generator::generate(project)
+	pub fn generate(project: &mut Project) -> Result<()> {
+		generator::generate_all_open(project)
 	}
 	pub fn get_track_by_any_isrc(&self, isrc: &str) -> Option<&Track> {
 		let index = *self.isrcs.get(isrc)?;
 		Some(&self.tracks[index])
 	}
-	pub fn get_track(&self, isrc: &str) -> Option<&Track> {
-		let track = self.get_track_by_any_isrc(isrc)?;
+	pub fn get_track(&self, isrc: &str) -> Result<&Track> {
+		let track = self
+			.get_track_by_any_isrc(isrc)
+			.context(format!("Track with ISRC {isrc} not found"))?;
 		match track.main_isrc == isrc {
-			true => Some(track),
-			false => None,
+			true => Ok(track),
+			false => bail!("Track ISRC {isrc} is a secondary ISRC"),
 		}
 	}
 	pub fn get_album(&self, upc: &str) -> Option<&Album> {
@@ -223,18 +223,18 @@ impl Project {
 	}
 	pub fn get_album_containing_isrc(&self, isrc: &str) -> Option<&Album> {
 		for (_, album) in &self.albums {
-			if album.isrcs.contains(isrc) {
+			if album.isrcs.contains(&isrc.to_string()) {
 				return Some(album);
 			}
 		}
 		None
 	}
-	pub fn get_accounting_period(&self, name: &str) -> Option<&AccountingPeriod> {
+	pub fn get_accounting_period(&self, name: &YearQuarter) -> Option<&AccountingPeriod> {
 		self.accounting_periods
 			.iter()
-			.find(|accounting_period| accounting_period.name == name)
+			.find(|accounting_period| &accounting_period.name == name)
 	}
-	pub fn add_result(&mut self, result: AccountingPeriod) -> Result<()> {
+	pub fn add_result(&mut self, result: AccountingPeriodResult) -> Result<()> {
 		let period = self.get_accounting_period(&result.name).unwrap();
 		match self.data.accounting_period_results.last() {
 			Some(last_result) => {
@@ -250,7 +250,7 @@ impl Project {
 			}
 		}
 		self.data.accounting_period_results.push(result);
-		match self.data.verify(&self) {
+		match self.data.validate(&self) {
 			Ok(_) => {}
 			Err(e) => {
 				self.data.accounting_period_results.pop();
@@ -259,7 +259,7 @@ impl Project {
 		};
 		Ok(())
 	}
-	pub fn add_and_save_result(&mut self, result: AccountingPeriod) -> Result<()> {
+	pub fn add_and_save_result(&mut self, result: AccountingPeriodResult) -> Result<()> {
 		self.add_result(result)?;
 		self.data.save(&self.data_file_path)?;
 		Ok(())
@@ -294,22 +294,19 @@ impl Album {
 
 #[derive(Clone)]
 pub struct AccountingPeriod {
-	pub name: String,
+	pub name: YearQuarter,
 	pub is_initial: bool,
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
 	pub fn contains_date(&self, date: &str) -> bool {
-		let year_quarter = YearQuarter::parse(&self.name);
-		year_quarter.contains_date(date)
+		self.name.contains_date(date)
 	}
-	pub fn prev_period(&self) -> String {
-		let current = YearQuarter::parse(&self.name);
-		let prev = current.get_prev();
-		format!("{} Q{}", prev.year, prev.quarter)
+	pub fn prev_period(&self) -> YearQuarter {
+		self.name.get_prev()
 	}
 	pub fn end_date(&self) -> NaiveDate {
-		let year_quarter = YearQuarter::parse(&self.name);
+		self.name.end_date()
 	}
 	fn generate_sales_report_csv_str(&self) -> String {
 		let files: Vec<_> = self
@@ -332,9 +329,6 @@ impl AccountingPeriod {
 	pub fn generate_sales_report(&self) -> SalesReport {
 		let sales_report_csv = self.generate_sales_report_csv_str();
 		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
-	}
-	pub fn generate_result(&self, project: &Project) -> Result<AccountingPeriodResult> {
-		AccountingPeriodResult::generate(self, project)
 	}
 	pub fn recoupable_costs_by_track(
 		&self,
@@ -399,7 +393,7 @@ pub struct TrackRecoupment {
 	note: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct YearQuarter {
 	year: u16,
 	quarter: u8,
@@ -413,11 +407,11 @@ impl YearQuarter {
 			year: parts[0].parse().unwrap(),
 			quarter: parts[1].parse().unwrap(),
 		};
-		value.assert_valid();
+		value.validate();
 
 		value
 	}
-	pub fn assert_valid(&self) {
+	pub fn validate(&self) {
 		assert!((1000..=9999).contains(&self.year));
 		assert!((1..=4).contains(&self.quarter));
 	}
@@ -429,7 +423,7 @@ impl YearQuarter {
 		} else {
 			value.quarter -= 1;
 		}
-		value.assert_valid();
+		value.validate();
 		value
 	}
 	pub fn contains_date(&self, date: &str) -> bool {
@@ -438,13 +432,37 @@ impl YearQuarter {
 		period_of_date == format!("{} {}", self.year, self.quarter)
 	}
 	pub fn end_date(&self) -> NaiveDate {
-		match quarter {
-        1 => NaiveDate::from_ymd_opt(year, 3, 31),
-        2 => NaiveDate::from_ymd_opt(year, 6, 30),
-        3 => NaiveDate::from_ymd_opt(year, 9, 30),
-        4 => NaiveDate::from_ymd_opt(year, 12, 31),
-        _ => panic!("Invalid quarter"),
-    }
+		match self.quarter {
+			1 => NaiveDate::from_ymd_opt(self.year.into(), 3, 31).unwrap(),
+			2 => NaiveDate::from_ymd_opt(self.year.into(), 6, 30).unwrap(),
+			3 => NaiveDate::from_ymd_opt(self.year.into(), 9, 30).unwrap(),
+			4 => NaiveDate::from_ymd_opt(self.year.into(), 12, 31).unwrap(),
+			_ => panic!("Invalid quarter"),
+		}
+	}
+}
+impl ToString for YearQuarter {
+	fn to_string(&self) -> String {
+		format!("{} Q{}", self.year, self.quarter)
+	}
+}
+impl Serialize for YearQuarter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		self.validate();
+		serializer.serialize_str(&self.to_string())
+	}
+}
+impl<'de> Deserialize<'de> for YearQuarter {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+		let value = Self::parse(&s);
+		Ok(value)
 	}
 }
 
@@ -482,10 +500,10 @@ struct SalesReportRecord {
 pub struct SalesReport {
 	pub isrc_map: HashMap<String, BigDecimal>,
 	pub upc_map: HashMap<String, BigDecimal>,
-	pub accounting_period_name: String,
+	pub accounting_period_name: YearQuarter,
 }
 impl SalesReport {
-	fn from_csv_str(sales_report_csv: String, accounting_period_name: String) -> Self {
+	fn from_csv_str(sales_report_csv: String, accounting_period_name: YearQuarter) -> Self {
 		let mut rdr = csv::Reader::from_reader(sales_report_csv.as_bytes());
 
 		let mut sales_report = Self {
