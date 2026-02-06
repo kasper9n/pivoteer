@@ -178,13 +178,3 @@ pub struct Track {
 	pub label_share: BigDecimal,
 	pub splits: Vec<Split>,
 }
-
-impl Track {
-	pub fn isrcs(&self) -> Vec<String> {
-		let mut isrcs = vec![self.main_isrc.clone()];
-		if let Some(secondary_isrcs) = &self.secondary_isrcs {
-			isrcs.extend(secondary_isrcs.clone());
-		}
-		isrcs
-	}
-}

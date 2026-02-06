@@ -3,6 +3,8 @@ use clap::{Args, Parser, Subcommand};
 use project::Project;
 use std::path::PathBuf;
 
+use crate::project::YearQuarter;
+
 mod accounting;
 mod generator;
 mod manifest;
@@ -11,7 +13,6 @@ mod project;
 mod project_data;
 mod sources;
 mod track_sales_report;
-mod transformers;
 
 #[derive(Parser)]
 #[command(about, long_about)]
@@ -86,42 +87,39 @@ fn main() -> Result<()> {
 		Commands::Migrate(_) => {}
 
 		Commands::Generate(args) => {
-			generator::generate_all_open(&mut project)?;
-			// let accounting_period = project
-			// 	.get_accounting_period(&args.accounting_period_name)
-			// 	.context("Accounting period from argument not found")?;
-			// let accounting_result = accounting_period.generate_result(&project)?;
+			let pname = YearQuarter::parse(&args.accounting_period_name);
+			let result = generator::generate(&mut project, &pname)?;
 
-			// if args.save {
-			// 	project.add_and_save_result(accounting_result)?;
-			// } else {
-			// 	println!("Finished! Re-run with --save it all seems good");
-			// }
+			if args.save {
+				project.add_and_save_result(result)?;
+			} else {
+				println!("Finished! Re-run with --save it all seems good");
+			}
 		}
 
 		Commands::GenerateUpTo(args) => {
-			// let periods = project.accounting_periods.clone();
-			// for accounting_period in periods {
-			// 	let end_now = accounting_period.name == args.accounting_period_name;
-			// 	let accounting_period = project
-			// 		.get_accounting_period(&accounting_period.name)
-			// 		.context("Accounting period from argument not found")?;
-			// 	let accounting_result = accounting_period.generate_result(&project)?;
+			let pname = YearQuarter::parse(&args.accounting_period_name);
 
-			// 	project.add_result(accounting_result)?;
-			// 	if args.save {
-			// 		project.accounting.save(&project.data_file_path)?;
-			// 	} else {
-			// 		println!("Finished! Re-run with --save it all seems good");
-			// 	}
+			let periods = project.accounting_periods.clone();
+			for accounting_period in periods {
+				let end_now = accounting_period.name == pname;
+				let result = generator::generate(&mut project, &pname)?;
 
-			// 	if end_now {
-			// 		break;
-			// 	}
-			// }
+				project.add_result(result)?;
+				if args.save {
+					project.data.save(&project.data_file_path)?;
+				} else {
+					println!("Finished! Re-run with --save it all seems good");
+				}
+
+				if end_now {
+					break;
+				}
+			}
 		}
 
-		Commands::Export(args) => {
+		Commands::Export(_args) => {
+			todo!();
 			// let result = project
 			// 	.accounting
 			// 	.get_accounting_result(&args.accounting_period_name)

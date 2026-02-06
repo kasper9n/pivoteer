@@ -7,35 +7,7 @@ use crate::{
 use anyhow::{Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 
-pub fn generate_all_open(project: &mut Project) -> Result<()> {
-	let open_pnames: Vec<_> = project
-		.accounting_periods
-		.iter()
-		.filter(|p| {
-			let result = project.data.get_accounting_result(&p.name);
-			let is_locked = result.map(|r| r.is_locked).unwrap_or(false);
-			!is_locked
-		})
-		.map(|period| period.name.clone())
-		.collect();
-
-	if open_pnames.is_empty() {
-		println!("No open periods to process. All periods are closed.");
-		return Ok(());
-	}
-	println!("Processing {} open period(s)", open_pnames.len());
-
-	// 4. Process each open period
-	for pname in open_pnames {
-		println!("Processing period: {}", pname.to_string());
-		let new_result = generate(project, &pname)?;
-	}
-
-	println!("✓ Generation complete");
-	Ok(())
-}
-
-fn generate(project: &mut Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
+pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
 	let period = project.get_accounting_period(&pname).unwrap();
 	let sales_report = period.generate_sales_report();
 	let track_sales_report = sales_report.into_track_sales_report(&project);

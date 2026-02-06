@@ -2,7 +2,7 @@ use crate::accounting::{sum_account_vouchers, AccountId, Balance, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
@@ -83,8 +83,11 @@ pub struct AccountingPeriodResult {
 	pub revenue_voucher: Voucher,
 	pub recoupment_vouchers: Vec<Voucher>,
 	pub track_distribution_vouchers: Vec<Voucher>,
+	#[serde(serialize_with = "sorted_map")]
 	pub closing_revenue_balances: HashMap<String, BigDecimal>,
+	#[serde(serialize_with = "sorted_map")]
 	pub closing_recoupment_balances: HashMap<String, BigDecimal>,
+	#[serde(serialize_with = "sorted_map")]
 	pub closing_artist_balances: HashMap<String, BigDecimal>,
 }
 
@@ -145,206 +148,6 @@ impl AccountingPeriodResult {
 			}
 		}
 	}
-	// pub fn generate(
-	// 	period: &AccountingPeriod,
-	// 	project: &Project,
-	// ) -> Result<AccountingPeriodResult> {
-	// 	let sales_report = period.generate_sales_report();
-	// 	let track_sales_report = sales_report.into_track_sales_report(&project);
-	// 	let track_statements =
-	// 		Self::generate_track_statements(track_sales_report, period, project)?;
-	// 	let artist_statements =
-	// 		Self::generate_artist_statements(&track_statements, period, &project)?;
-	// 	Ok(AccountingPeriodResult {
-	// 		name: period.name.clone(),
-	// 		is_initial: period.is_initial,
-	// 		track_statements,
-	// 		artist_statements,
-	// 	})
-	// }
-	// fn generate_track_statements(
-	// 	track_sales_report: TrackSalesReport,
-	// 	period: &AccountingPeriod,
-	// 	project: &Project,
-	// ) -> Result<TrackStatementsMap> {
-	// 	let new_recoupable_costs = period.recoupable_costs_by_track(project)?;
-
-	// 	let previous_net_amounts: HashMap<String, BigDecimal> = match &period.is_initial {
-	// 		true => HashMap::new(),
-	// 		false => {
-	// 			let previous_period = period.prev_period();
-	// 			let previous_result = project
-	// 				.data
-	// 				.get_accounting_result(&previous_period)
-	// 				.context("Could not find result from previous period \"{previous_period}\"")?;
-	// 			previous_result
-	// 				.track_statements
-	// 				.iter()
-	// 				.map(|(isrc, track_statement)| {
-	// 					(isrc.clone(), track_statement.net_amount.clone())
-	// 				})
-	// 				.collect()
-	// 		}
-	// 	};
-
-	// 	// Add previous costs
-	// 	let mut statements: TrackStatementsMap = previous_net_amounts
-	// 		.into_iter()
-	// 		.map(|(isrc, previous_net_amounts)| {
-	// 			let mut statement = TrackStatement::default();
-	// 			statement.opening_net_amount = previous_net_amounts;
-	// 			statement.isrc = isrc.clone();
-	// 			(isrc, statement)
-	// 		})
-	// 		.collect();
-
-	// 	// Add new costs
-	// 	for new_recoupable_costs in new_recoupable_costs.into_values() {
-	// 		let statement = statements
-	// 			.entry(new_recoupable_costs.isrc.clone())
-	// 			.or_insert_with(|| TrackStatement {
-	// 				isrc: new_recoupable_costs.isrc.clone(),
-	// 				..Default::default()
-	// 			});
-	// 		statement.new_costs = new_recoupable_costs.recoup;
-	// 	}
-
-	// 	// Add track statements for everything in the sales report
-	// 	for (isrc, sales_info) in track_sales_report.tracks {
-	// 		let statement = statements.entry(isrc).or_default();
-
-	// 		let opening_net_amount = statement.opening_net_amount.clone();
-	// 		let gross_royalties = sales_info.gross_royalties;
-	// 		let new_costs = statement.new_costs.clone();
-
-	// 		*statement = TrackStatement {
-	// 			isrc: "".to_string(),
-	// 			title: "".to_string(),
-	// 			opening_net_amount,
-	// 			gross_royalties,
-	// 			new_costs,
-	// 			net_amount: BigDecimal::zero(),
-	// 		};
-	// 	}
-
-	// 	// Fill in remaining fields for all elements
-	// 	for (isrc, statement) in &mut statements {
-	// 		let track = project.get_track(&isrc).unwrap();
-	// 		statement.isrc = track.main_isrc.clone();
-	// 		statement.net_amount = statement.opening_net_amount.clone()
-	// 			+ statement.gross_royalties.clone()
-	// 			- statement.new_costs.clone();
-	// 		statement.title = track.title.clone();
-
-	// 		ensure!(isrc != "");
-	// 		ensure!(isrc == statement.isrc.as_str());
-	// 	}
-
-	// 	Ok(statements)
-	// }
-	// fn generate_artist_statements(
-	// 	track_statements: &TrackStatementsMap,
-	// 	period: &AccountingPeriod,
-	// 	project: &Project,
-	// ) -> Result<ArtistStatementsMap> {
-	// 	let mut artist_statements: ArtistStatementsMap = HashMap::new();
-
-	// 	for track_statement in track_statements.values() {
-	// 		let track = project.get_track(&track_statement.isrc).unwrap();
-	// 		let artists_share = BigDecimal::from(100) - &track.label_share;
-	// 		for split in &track.splits {
-	// 			let artist_statement =
-	// 				artist_statements
-	// 					.entry(split.name.clone())
-	// 					.or_insert_with(|| {
-	// 						return ArtistStatement {
-	// 							net_royalties: BigDecimal::zero(),
-	// 							tracks: vec![],
-	// 						};
-	// 					});
-	// 			let total_artist_split =
-	// 				pct_to_factor(&artists_share) * pct_to_factor(&split.share);
-	// 			let artist_track_statement = ArtistTrackStatement {
-	// 				isrc: track_statement.isrc.clone(),
-	// 				net_royalties: track_statement.payable() * total_artist_split,
-	// 			};
-	// 			if artist_track_statement.net_royalties.is_positive() {
-	// 				artist_statement.net_royalties += artist_track_statement.net_royalties.clone();
-	// 			}
-	// 			artist_statement.tracks.push(artist_track_statement);
-	// 			// sort tracks for determinism
-	// 			artist_statement.tracks.sort_unstable_by(|a, b| {
-	// 				// net royalties (descending)
-	// 				b.net_royalties
-	// 					.cmp(&a.net_royalties)
-	// 					.then_with(|| a.isrc.cmp(&b.isrc))
-	// 					.then_with(|| panic!("Duplicate ISRCs in artist statement"))
-	// 			})
-	// 		}
-	// 	}
-
-	// 	// Add statements for artists that have past statements, but no track royalties this period
-	// 	if !period.is_initial {
-	// 		let previous_result = project
-	// 			.data
-	// 			.get_accounting_result(&period.prev_period())
-	// 			.unwrap();
-	// 		for (name, _statement) in previous_result.artist_statements.iter() {
-	// 			artist_statements
-	// 				.entry(name.clone())
-	// 				.or_insert(ArtistStatement {
-	// 					net_royalties: BigDecimal::zero(),
-	// 					tracks: vec![],
-	// 				});
-	// 		}
-	// 	}
-
-	// 	Ok(artist_statements)
-	// }
-	// pub fn export(&self) -> Export {
-	// 	let mut artist_statements: Vec<_> = self
-	// 		.artist_statements
-	// 		.iter()
-	// 		.map(|(payee, statement)| {
-	// 			let mut tracks: Vec<_> = statement
-	// 				.tracks
-	// 				.iter()
-	// 				.map(|ats| {
-	// 					let track_statement = self.track_statements.get(&ats.isrc).unwrap();
-	// 					let payable = track_statement.payable();
-	// 					return ArtistTrackStatementExport {
-	// 						isrc: ats.isrc.clone(),
-	// 						title: track_statement.title.clone(),
-	// 						gross_royalties: track_statement.gross_royalties.clone(),
-	// 						payable_royalties: payable.clone(),
-	// 						net_royalties: ats.net_royalties.clone(),
-	// 					};
-	// 				})
-	// 				.collect();
-	// 			tracks.sort_by(|a, b| {
-	// 				b.net_royalties
-	// 					.cmp(&a.net_royalties)
-	// 					.then_with(|| a.isrc.cmp(&b.isrc))
-	// 					.then_with(|| panic!("Sort duplicate artist statement track"))
-	// 			});
-	// 			return ArtistStatementExport {
-	// 				payee: payee.clone(),
-	// 				net_royalties: statement.net_royalties.to_string(),
-	// 				tracks,
-	// 			};
-	// 		})
-	// 		.collect();
-	// 	artist_statements.sort_by(|a, b| {
-	// 		numeric_sort::cmp(&b.net_royalties, &a.net_royalties)
-	// 			.then_with(|| numeric_sort::cmp(&b.payee, &a.payee))
-	// 			.then_with(|| panic!("Sort duplicate artist statement"))
-	// 	});
-	// 	Export {
-	// 		name: self.name.clone(),
-	// 		is_initial: self.is_initial,
-	// 		artist_statements,
-	// 	}
-	// }
 }
 
 #[derive(Serialize)]
@@ -417,64 +220,4 @@ mod test {
 		);
 		Ok(())
 	}
-}
-
-/// ISRC -> TrackStatement
-type TrackStatementsMap = HashMap<String, TrackStatement>;
-
-fn normalized_serialize<S>(x: &BigDecimal, s: S) -> Result<S::Ok, S::Error>
-where
-	S: Serializer,
-{
-	x.normalized().serialize(s)
-}
-
-/// ## Example
-///
-/// | Type               |   Jan |   Feb |   Apr |   Mar |   May |
-/// | ------------------ | ----- | ----- | ----- | ----- | ----- |
-/// | opening_net_amount |     0 |  -250 |  -200 |    50 |   250 |
-/// | gross_royalties    |    50 |    50 |   250 |   200 |    50 |
-/// | new_costs          |  -300 |     0 |     0 |     0 |  -400 |
-/// | new_amount         |  -250 |  -200 |    50 |   250 |  -100 |
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct TrackStatement {
-	isrc: String,
-	title: String,
-	/// All-time track royalties minus all-time track costs
-	#[serde(serialize_with = "normalized_serialize")]
-	opening_net_amount: BigDecimal,
-	#[serde(serialize_with = "normalized_serialize")]
-	gross_royalties: BigDecimal,
-	/// New recoupable costs
-	#[serde(serialize_with = "normalized_serialize")]
-	new_costs: BigDecimal,
-	/// All-time track royalties minus all-time track costs
-	#[serde(serialize_with = "normalized_serialize")]
-	net_amount: BigDecimal,
-}
-impl TrackStatement {
-	/// Artist-payable royalties from this statement. Gross royalties - costs - negative opening balance
-	pub fn payable(&self) -> BigDecimal {
-		let negative_opening_balance = self.opening_net_amount.clone().min(BigDecimal::zero());
-		self.gross_royalties.clone() - self.new_costs.clone() + negative_opening_balance
-	}
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct ArtistStatement {
-	#[serde(serialize_with = "normalized_serialize")]
-	net_royalties: BigDecimal,
-	tracks: Vec<ArtistTrackStatement>,
-}
-type ArtistStatementsMap = HashMap<String, ArtistStatement>;
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct ArtistTrackStatement {
-	pub isrc: String,
-	#[serde(serialize_with = "normalized_serialize")]
-	pub net_royalties: BigDecimal,
 }

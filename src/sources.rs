@@ -60,7 +60,7 @@ impl Source {
 			.flatten()
 			.collect()
 	}
-	pub fn process_source(&self) -> Pipeline {
+	pub fn process_source(&self) -> Pipeline<'_> {
 		match &self.kind {
 			SourceKind::Bandcamp => bandcamp(&self.file_path),
 			SourceKind::CurveRoyaltySystems => curve(&self),
@@ -100,7 +100,7 @@ impl SourceKind {
 	}
 }
 
-fn bandcamp(file_path: &PathBuf) -> Pipeline {
+fn bandcamp(file_path: &PathBuf) -> Pipeline<'_> {
 	Pipeline::from_path(file_path)
 		.unwrap()
 		.filter_col("item type", |item_type| match item_type {
@@ -130,7 +130,7 @@ fn bandcamp(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
-fn curve(source: &Source) -> Pipeline {
+fn curve(source: &Source) -> Pipeline<'_> {
 	Pipeline::from_path(&source.file_path)
 		.unwrap()
 		// These are probably ok, but handle them later
@@ -287,7 +287,7 @@ fn curve(source: &Source) -> Pipeline {
 		])
 }
 
-fn landr(file_path: &PathBuf) -> Pipeline {
+fn landr(file_path: &PathBuf) -> Pipeline<'_> {
 	Pipeline::from_path(file_path)
 		.unwrap()
 		.validate(|headers, row| match headers.get_field(&row, "Share %") {
@@ -334,7 +334,7 @@ fn parse_pretzel_disbursement(text: &str) -> Result<NaiveDate, Error> {
 	Ok(disbursement)
 }
 
-fn pretzel(file_path: &PathBuf) -> Pipeline {
+fn pretzel(file_path: &PathBuf) -> Pipeline<'_> {
 	Pipeline::from_path(file_path)
 		.unwrap()
 		.add_col("Reporting Period", |headers, row| {
@@ -389,7 +389,7 @@ fn skip_to_new_header(reader: csv::Reader<File>, n: usize) -> csv::Reader<File> 
 	reader
 }
 
-fn repost_network(file_path: &PathBuf) -> Pipeline {
+fn repost_network(file_path: &PathBuf) -> Pipeline<'_> {
 	let file = match File::open(file_path) {
 		Ok(file) => file,
 		Err(_) => panic!("Could not open file: {}", file_path.to_string_lossy()),
@@ -417,7 +417,7 @@ fn repost_network(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
-fn stem(file_path: &PathBuf) -> Pipeline {
+fn stem(file_path: &PathBuf) -> Pipeline<'_> {
 	Pipeline::from_path(file_path)
 		.unwrap()
 		.add_col("Reporting Period", |headers, row| {
@@ -456,7 +456,7 @@ fn stem(file_path: &PathBuf) -> Pipeline {
 		])
 }
 
-fn symphonic(file_path: &PathBuf) -> Pipeline {
+fn symphonic(file_path: &PathBuf) -> Pipeline<'_> {
 	fn symphonic_quarter(s: &str) -> Option<(u16, u8)> {
 		// Q(1-4)(06-17)
 		let re = Regex::new(r"^Q([1-4])(0[6-9]|1[0-7])$").ok()?;

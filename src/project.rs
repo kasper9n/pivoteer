@@ -1,4 +1,3 @@
-use crate::generator;
 use crate::manifest::{
 	AlbumManifest, AlbumTrack, CatalogItem, Manifest, RecoupmentManifest, Track,
 };
@@ -202,9 +201,6 @@ impl Project {
 		}
 		Ok(())
 	}
-	pub fn generate(project: &mut Project) -> Result<()> {
-		generator::generate_all_open(project)
-	}
 	pub fn get_track_by_any_isrc(&self, isrc: &str) -> Option<&Track> {
 		let index = *self.isrcs.get(isrc)?;
 		Some(&self.tracks[index])
@@ -269,6 +265,7 @@ impl Project {
 #[derive(Clone)]
 pub struct Album {
 	pub upc: String,
+	#[allow(unused)]
 	pub title: String,
 	pub isrcs: Vec<String>,
 	pub recoupment: Option<RecoupmentManifest>,
@@ -366,17 +363,17 @@ impl AccountingPeriod {
 					track_recoupment.expense += cost.expense.clone();
 					track_recoupment.recoup += cost.recoup.clone();
 					todo!("These two need to be checked elsewhere:");
-					ensure!(
-						track_recoupment.recoup <= track.max_recoup,
-						"Track recoupment exceeds max_recoup: {}",
-						track_recoupment.name,
-					);
-					ensure!(
-						track_recoupment.recoup <= track_recoupment.expense,
-						"{} track recoupment exceeds expenses: {}",
-						cost.date,
-						track_recoupment.name,
-					);
+					// ensure!(
+					// 	track_recoupment.recoup <= track.max_recoup,
+					// 	"Track recoupment exceeds max_recoup: {}",
+					// 	track_recoupment.name,
+					// );
+					// ensure!(
+					// 	track_recoupment.recoup <= track_recoupment.expense,
+					// 	"{} track recoupment exceeds expenses: {}",
+					// 	cost.date,
+					// 	track_recoupment.name,
+					// );
 				}
 			}
 		}
