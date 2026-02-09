@@ -13,7 +13,7 @@ pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<Accounting
 	let period = project.get_accounting_period(&pname).unwrap();
 	let sales_report = period.generate_sales_report();
 	let track_sales_report = sales_report.into_track_sales_report(&project);
-	let revenue_voucher = create_revenue_voucher(&track_sales_report, &pname, &mut *project)?;
+	let revenue_voucher = create_revenue_voucher(&track_sales_report)?;
 
 	let recoupment_vouchers = create_recoupment_vouchers(&pname, &mut *project)?;
 
@@ -44,11 +44,7 @@ pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<Accounting
 	Ok(result)
 }
 
-fn create_revenue_voucher(
-	track_sales_report: &TrackSalesReport,
-	pname: &YearQuarter,
-	project: &mut Project,
-) -> Result<Voucher> {
+fn create_revenue_voucher(track_sales_report: &TrackSalesReport) -> Result<Voucher> {
 	let revenue_entry = Entry {
 		account: AccountId::Revenue,
 		amount: -track_sales_report
@@ -71,12 +67,7 @@ fn create_revenue_voucher(
 		entries.push(track_entry);
 	}
 
-	let voucher = Voucher::new_validated(
-		project.data.generate_voucher_id(),
-		pname.end_date(),
-		entries,
-		None,
-	)?;
+	let voucher = Voucher::new_validated(entries)?;
 	Ok(voucher)
 }
 
@@ -101,12 +92,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 						note: None,
 					},
 				];
-				let voucher = Voucher::new_validated(
-					project.data.generate_voucher_id(),
-					pname.end_date(),
-					entries,
-					None,
-				)?;
+				let voucher = Voucher::new_validated(entries)?;
 				recoupment_vouchers.push(voucher);
 			}
 		}
@@ -130,12 +116,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 						note: None,
 					},
 				];
-				let voucher = Voucher::new_validated(
-					project.data.generate_voucher_id(),
-					pname.end_date(),
-					entries,
-					None,
-				)?;
+				let voucher = Voucher::new_validated(entries)?;
 				recoupment_vouchers.push(voucher);
 			}
 		}
@@ -209,11 +190,6 @@ fn distribute_track_revenue(
 		}
 	}
 
-	let voucher = Voucher {
-		id: project.data.generate_voucher_id(),
-		date: result.end_date(),
-		entries,
-		note: None,
-	};
+	let voucher = Voucher { entries };
 	Ok(voucher)
 }

@@ -4,10 +4,10 @@
 		{
 			"name": "1999 Q1",
 			"is_initial": true,
-			"landr": ["1-landr.csv"],
 		},
 		{
 			"name": "1999 Q2",
+			"landr": ["1-landr.csv"],
 		},
 	],
 	"catalog": [

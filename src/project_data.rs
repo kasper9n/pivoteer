@@ -3,7 +3,6 @@ use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
@@ -19,7 +18,6 @@ pub fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct AccountingData {
-	pub last_voucher_id: u32,
 	pub accounting_period_results: Vec<AccountingPeriodResult>,
 }
 impl AccountingData {
@@ -76,12 +74,6 @@ impl AccountingData {
 		fs::write(data_file_path, buf).context("Failed to write data file")?;
 		Ok(())
 	}
-
-	pub fn generate_voucher_id(&mut self) -> u32 {
-		let id = self.last_voucher_id;
-		self.last_voucher_id += 1;
-		id
-	}
 }
 
 // https://stackoverflow.com/a/74971717/6553404
@@ -131,9 +123,6 @@ impl AccountingPeriodResult {
 				.get_accounting_result(&prev_name)
 				.expect("Could not find previous result"),
 		)
-	}
-	pub fn end_date(&self) -> NaiveDate {
-		self.name.end_date()
 	}
 	pub fn get_closing_balances(&self, project: &Project) -> HashMap<String, BigDecimal> {
 		let prev_result = self.prev_result(project);

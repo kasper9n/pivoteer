@@ -6,7 +6,6 @@ use crate::sources::{parse_date, Source};
 use crate::track_sales_report::TrackSalesReport;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::BigDecimal;
-use chrono::NaiveDate;
 use csv_pipeline::{Pipeline, Transformer};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -360,15 +359,15 @@ impl YearQuarter {
 		let period_of_date = date.format("%Y %q").to_string();
 		period_of_date == format!("{} {}", self.year, self.quarter)
 	}
-	pub fn end_date(&self) -> NaiveDate {
-		match self.quarter {
-			1 => NaiveDate::from_ymd_opt(self.year.into(), 3, 31).unwrap(),
-			2 => NaiveDate::from_ymd_opt(self.year.into(), 6, 30).unwrap(),
-			3 => NaiveDate::from_ymd_opt(self.year.into(), 9, 30).unwrap(),
-			4 => NaiveDate::from_ymd_opt(self.year.into(), 12, 31).unwrap(),
-			_ => panic!("Invalid quarter"),
-		}
-	}
+	// pub fn end_date(&self) -> NaiveDate {
+	// 	match self.quarter {
+	// 		1 => NaiveDate::from_ymd_opt(self.year.into(), 3, 31).unwrap(),
+	// 		2 => NaiveDate::from_ymd_opt(self.year.into(), 6, 30).unwrap(),
+	// 		3 => NaiveDate::from_ymd_opt(self.year.into(), 9, 30).unwrap(),
+	// 		4 => NaiveDate::from_ymd_opt(self.year.into(), 12, 31).unwrap(),
+	// 		_ => panic!("Invalid quarter"),
+	// 	}
+	// }
 }
 impl ToString for YearQuarter {
 	fn to_string(&self) -> String {

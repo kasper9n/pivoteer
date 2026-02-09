@@ -1,6 +1,5 @@
 use anyhow::{bail, ensure, Result};
 use bigdecimal::BigDecimal;
-use chrono::NaiveDate;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,27 +84,15 @@ pub struct Entry {
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(transparent)]
 pub struct Voucher {
-	pub id: u32,
-	pub date: NaiveDate,
 	pub entries: Vec<Entry>,
-	pub note: Option<String>,
 }
 
 impl Voucher {
-	pub fn new_validated(
-		id: u32,
-		date: NaiveDate,
-		entries: Vec<Entry>,
-		note: Option<String>,
-	) -> Result<Self> {
+	pub fn new_validated(entries: Vec<Entry>) -> Result<Self> {
 		ensure!(entries.len() >= 2, "Voucher must have at least 2 entries");
-		let voucher = Voucher {
-			id,
-			date,
-			entries,
-			note,
-		};
+		let voucher = Voucher { entries };
 		voucher.validate()?;
 		Ok(voucher)
 	}
