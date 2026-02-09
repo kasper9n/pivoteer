@@ -5,19 +5,30 @@
 			"is_initial": true,
 			"is_locked": false,
 			"revenue_voucher": [
-				{"account":"revenue","amount":"0"}
+				{"account":"revenue","amount":"-40"},
+				{"account":"track:BB9999999999","amount":"40"}
 			],
 			"recoupment_vouchers": [
 				[
 					{"account":"recoupment:track:AA9999999999","amount":"-30"},
 					{"account":"recoupment_expense","amount":"30"}
+				],
+				[
+					{"account":"recoupment:track:BB9999999999","amount":"-40"},
+					{"account":"recoupment_expense","amount":"40"}
 				]
 			],
-			"track_distribution_vouchers": {},
+			"track_distribution_vouchers": {
+				"BB9999999999": [
+					{"account":"track:BB9999999999","amount":"-40"},
+					{"account":"recoupment:track:BB9999999999","amount":"40"}
+				]
+			},
 			"closing_balances": {
-				"revenue": "0",
+				"revenue": "-40",
 				"recoupment:track:AA9999999999": "-30",
-				"recoupment_expense": "30",
+				"recoupment:track:BB9999999999": "0",
+				"recoupment_expense": "70",
 				"artist:Salvatore Ganacci": "0"
 			}
 		},
@@ -27,12 +38,17 @@
 			"is_locked": false,
 			"revenue_voucher": [
 				{"account":"revenue","amount":"-100"},
-				{"account":"track:AA9999999999","amount":"100"}
+				{"account":"track:AA9999999999","amount":"100"},
+				{"account":"track:BB9999999999","amount":"0"}
 			],
 			"recoupment_vouchers": [
 				[
 					{"account":"recoupment:track:AA9999999999","amount":"-10"},
 					{"account":"recoupment_expense","amount":"10"}
+				],
+				[
+					{"account":"recoupment:track:BB9999999999","amount":"40"},
+					{"account":"recoupment_expense","amount":"-40"}
 				]
 			],
 			"track_distribution_vouchers": {
@@ -40,15 +56,22 @@
 					{"account":"track:AA9999999999","amount":"-100"},
 					{"account":"recoupment:track:AA9999999999","amount":"40"},
 					{"account":"label_royalty","amount":"30"},
-					{"account":"artist:Salvatore Ganacci","amount":"60"}
+					{"account":"artist:Salvatore Ganacci","amount":"30"}
+				],
+				"BB9999999999": [
+					{"account":"track:BB9999999999","amount":"0"},
+					{"account":"recoupment:track:BB9999999999","amount":"-40"},
+					{"account":"label_royalty","amount":"20"},
+					{"account":"artist:Salvatore Ganacci","amount":"20"}
 				]
 			},
 			"closing_balances": {
-				"artist:Salvatore Ganacci": "60",
-				"label_royalty": "30",
+				"artist:Salvatore Ganacci": "50",
+				"label_royalty": "50",
 				"recoupment:track:AA9999999999": "0",
+				"recoupment:track:BB9999999999": "0",
 				"recoupment_expense": "40",
-				"revenue": "-100"
+				"revenue": "-140"
 			}
 		}
 	]

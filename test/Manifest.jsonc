@@ -4,10 +4,11 @@
 		{
 			"name": "1999 Q1",
 			"is_initial": true,
+			"landr": ["1-landr.csv"],
 		},
 		{
 			"name": "1999 Q2",
-			"landr": ["1-landr.csv"],
+			"landr": ["2-landr.csv"],
 		},
 	],
 	"catalog": [
@@ -23,6 +24,20 @@
 			"recoupments": [
 				{ "date": "1999-01-15", "expense": "30", "recoup": "30", "note": "Paid to X" },
 				{ "date": "1999-04-15", "expense": "20", "recoup": "10", "note": "Paid to X" },
+			],
+		},
+		{
+			"isrc": "BB9999999999",
+			"single_upcs": ["2"],
+			"title": "RefundTest",
+			"label_share": "50",
+			"splits": [{ "name": "Salvatore Ganacci", "share": "100" }],
+			"max_recoup": "40",
+			"expenses": "0",
+			"recoup": "0",
+			"recoupments": [
+				{ "date": "1999-01-15", "expense": "40", "recoup": "40", "note": "Paid to X" },
+				{ "date": "1999-04-15", "expense": "-40", "recoup": "-40", "note": "Refund" },
 			],
 		},
 		// {
