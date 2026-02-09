@@ -1,4 +1,4 @@
-use crate::accounting::{AccountId, Voucher};
+use crate::accounting::{sum_account_vouchers, AccountId, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{ensure, Context, Result};
@@ -110,19 +110,29 @@ impl AccountingPeriodResult {
 
 		let mut closing_balances = prev_closing_balances.unwrap_or_default();
 
+		for (account, balance_change) in self.get_balance_changes() {
+			let closing_balance = closing_balances
+				.entry(account)
+				.or_insert(BigDecimal::zero());
+			*closing_balance += &balance_change;
+		}
+
+		closing_balances
+	}
+	pub fn get_balance_changes(&self) -> HashMap<String, BigDecimal> {
+		let mut balance_changes = HashMap::new();
 		let vouchers = once(&self.revenue_voucher)
 			.chain(self.recoupment_vouchers.iter())
 			.chain(self.track_distribution_vouchers.values());
 		for voucher in vouchers {
 			for entry in &voucher.entries {
-				let closing_balance = closing_balances
+				let balance_change = balance_changes
 					.entry(entry.account.to_string())
 					.or_insert(BigDecimal::zero());
-				*closing_balance += &entry.amount;
+				*balance_change += &entry.amount;
 			}
 		}
-
-		closing_balances
+		balance_changes
 	}
 	pub fn get_closing_balance(
 		&self,
@@ -169,11 +179,69 @@ impl AccountingPeriodResult {
 			}
 		}
 	}
+	pub fn export(&self, project: &Project) -> Export {
+		let mut artist_statements = Vec::new();
+		for (account, balance) in &self.closing_balances {
+			let account_id = AccountId::parse(account).unwrap();
+			let artist_name = match account_id {
+				AccountId::Artist(name) => name,
+				_ => continue,
+			};
+			let mut artist_statement = ArtistStatementExport {
+				payee: artist_name.clone(),
+				net_royalties: balance.clone(),
+				tracks: Vec::new(),
+			};
+			for (isrc, voucher) in &self.track_distribution_vouchers {
+				let track_account = AccountId::Track(isrc.clone());
+				for entry in &voucher.entries {
+					match &entry.account {
+						AccountId::Artist(n) if n == &artist_name => {
+							let gross_royalties = sum_account_vouchers(
+								&track_account,
+								&[self.revenue_voucher.clone()],
+							)
+							.expect("Track distribution entry has no track revenue voucher");
+							let payable_royalties = voucher
+								.entries
+								.iter()
+								.find(|e| e.account == AccountId::Track(isrc.clone()))
+								.expect("No track entry in distribution voucher");
+							let track = project.get_track(isrc).unwrap();
+							artist_statement.tracks.push(ArtistTrackStatementExport {
+								isrc: isrc.clone(),
+								title: track.title.clone(),
+								gross_royalties: gross_royalties.clone(),
+								payable_royalties: payable_royalties.amount.clone(),
+								net_royalties: entry.amount.clone(),
+							});
+						}
+						_ => continue,
+					}
+				}
+			}
+			assert!(
+				artist_statement.net_royalties
+					== artist_statement
+						.tracks
+						.iter()
+						.map(|t| &t.net_royalties)
+						.sum::<BigDecimal>(),
+				"Artist statement net royalties do not match"
+			);
+			artist_statements.push(artist_statement);
+		}
+		Export {
+			name: self.name.clone(),
+			is_initial: self.is_initial,
+			artist_statements,
+		}
+	}
 }
 
 #[derive(Serialize)]
 pub struct Export {
-	name: String,
+	name: YearQuarter,
 	is_initial: bool,
 	artist_statements: Vec<ArtistStatementExport>,
 }
@@ -195,7 +263,7 @@ impl Export {
 #[derive(Serialize)]
 pub struct ArtistStatementExport {
 	payee: String,
-	net_royalties: String,
+	net_royalties: BigDecimal,
 	tracks: Vec<ArtistTrackStatementExport>,
 }
 #[derive(Serialize)]

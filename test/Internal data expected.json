@@ -18,14 +18,10 @@
 					{ "account": "artist:Salvatore Ganacci", "amount": "0" },
 				],
 			},
-			"closing_revenue_balances": {
+			"closing_balances": {
 				"revenue": "0",
-			},
-			"closing_recoupment_balances": {
-				"track:A": "-30",
-			},
-			"closing_artist_balances": {
-				"Salvatore Ganacci": "0",
+				"recoupment:track:A": "-30",
+				"artist:Salvatore Ganacci": "0",
 			},
 		},
 		{
@@ -49,14 +45,10 @@
 					{ "account": "artist:Salvatore Ganacci", "amount": "60" },
 				],
 			},
-			"closing_revenue_balances": {
+			"closing_balances": {
 				"revenue": "-100",
-			},
-			"closing_recoupment_balances": {
-				"track:A": "0",
-			},
-			"closing_artist_balances": {
-				"Salvatore Ganacci": "60",
+				"recoupment:track:A": "0",
+				"artist:Salvatore Ganacci": "60",
 			},
 		},
 	]

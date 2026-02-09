@@ -118,16 +118,17 @@ fn main() -> Result<()> {
 			}
 		}
 
-		Commands::Export(_args) => {
-			todo!();
-			// let result = project
-			// 	.accounting
-			// 	.get_accounting_result(&args.accounting_period_name)
-			// 	.context("No result")?;
-			// let file_name = result.name.to_string() + ".json";
-			// let export = result.export();
-			// export.save_to_downloads(file_name)?;
-			// return Ok(());
+		Commands::Export(args) => {
+			let pname = YearQuarter::parse(&args.accounting_period_name);
+
+			let result = project
+				.data
+				.get_accounting_result(&pname)
+				.context("No result")?;
+			let file_name = result.name.to_string() + ".json";
+			let export = result.export();
+			export.save_to_downloads(file_name)?;
+			return Ok(());
 		}
 	}
 
