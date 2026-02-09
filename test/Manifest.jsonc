@@ -21,18 +21,8 @@
 			"expenses": "50",
 			"recoup": "40",
 			"recoupments": [
-				{
-					"date": "1999-01-15",
-					"expense": "30",
-					"recoup": "30",
-					"note": "Paid to X",
-				},
-				{
-					"date": "1999-03-15",
-					"expense": "20",
-					"recoup": "10",
-					"note": "Paid to X",
-				},
+				{ "date": "1999-01-15", "expense": "30", "recoup": "30", "note": "Paid to X" },
+				{ "date": "1999-03-15", "expense": "20", "recoup": "10", "note": "Paid to X" },
 			],
 		},
 		// {

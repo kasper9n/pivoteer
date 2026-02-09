@@ -1,3 +1,4 @@
+use crate::project_data::compact_elements;
 use anyhow::{bail, ensure, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -112,6 +113,7 @@ pub struct Entry {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(transparent)]
 pub struct Voucher {
+	#[serde(serialize_with = "compact_elements")]
 	pub entries: Vec<Entry>,
 }
 

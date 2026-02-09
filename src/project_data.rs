@@ -4,6 +4,7 @@ use crate::to_json_string_pretty;
 use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::value::RawValue;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -296,6 +297,22 @@ struct ArtistTrackStatementExport {
 	pub net_royalties: BigDecimal,
 }
 
+pub fn compact_elements<T, S>(items: &[T], s: S) -> Result<S::Ok, S::Error>
+where
+	T: Serialize,
+	S: Serializer,
+{
+	let raw_list: Vec<_> = items
+		.iter()
+		.map(|i| {
+			let json = serde_json::to_string(i).map_err(serde::ser::Error::custom)?;
+			RawValue::from_string(json).map_err(serde::ser::Error::custom)
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	raw_list.serialize(s)
+}
+
 #[cfg(test)]
 mod test {
 	use crate::generator::generate;
@@ -314,6 +331,8 @@ mod test {
 
 		let q2_result = generate(&mut project, &YearQuarter::parse("1999 Q2"))?;
 		project.add_result(q2_result)?;
+
+		// project.data.save(&project.data_file_path)?;
 
 		let expected_data =
 			AccountingData::open(&PathBuf::from("test/Internal data expected.json"))?;
