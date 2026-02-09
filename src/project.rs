@@ -296,14 +296,8 @@ pub struct AccountingPeriod {
 	sources: Vec<Source>,
 }
 impl AccountingPeriod {
-	pub fn contains_date(&self, date: &str) -> bool {
-		self.name.contains_date(date)
-	}
 	pub fn prev_period(&self) -> YearQuarter {
 		self.name.get_prev()
-	}
-	pub fn end_date(&self) -> NaiveDate {
-		self.name.end_date()
 	}
 	fn generate_sales_report_csv_str(&self) -> String {
 		let files: Vec<_> = self
@@ -327,67 +321,6 @@ impl AccountingPeriod {
 		let sales_report_csv = self.generate_sales_report_csv_str();
 		SalesReport::from_csv_str(sales_report_csv, self.name.clone())
 	}
-	pub fn recoupable_costs_by_track(
-		&self,
-		project: &Project,
-	) -> Result<HashMap<String, TrackRecoupment>> {
-		let mut track_recoupments: HashMap<String, TrackRecoupment> = HashMap::new();
-
-		for (_, album) in &project.albums {
-			assert!(
-				album.recoupment.is_none(),
-				"Album recoupment not yet supported"
-			);
-		}
-
-		for track in &project.tracks {
-			ensure!(
-				!track_recoupments.contains_key(&track.main_isrc),
-				"Duplicate ISRC in recoupment"
-			);
-			let recoupment_manifest = match &track.recoupment {
-				Some(v) => v,
-				None => continue,
-			};
-			for cost in &recoupment_manifest.recoupments {
-				if self.contains_date(&cost.date) {
-					let track_recoupment = track_recoupments
-						.entry(track.main_isrc.clone())
-						.or_insert(TrackRecoupment {
-							isrc: track.main_isrc.clone(),
-							expense: BigDecimal::from(0),
-							recoup: BigDecimal::from(0),
-							name: track.title.clone(),
-							note: None,
-						});
-					track_recoupment.expense += cost.expense.clone();
-					track_recoupment.recoup += cost.recoup.clone();
-					todo!("These two need to be checked elsewhere:");
-					// ensure!(
-					// 	track_recoupment.recoup <= track.max_recoup,
-					// 	"Track recoupment exceeds max_recoup: {}",
-					// 	track_recoupment.name,
-					// );
-					// ensure!(
-					// 	track_recoupment.recoup <= track_recoupment.expense,
-					// 	"{} track recoupment exceeds expenses: {}",
-					// 	cost.date,
-					// 	track_recoupment.name,
-					// );
-				}
-			}
-		}
-		Ok(track_recoupments)
-	}
-}
-
-#[derive(Debug)]
-pub struct TrackRecoupment {
-	pub isrc: String,
-	expense: BigDecimal,
-	pub recoup: BigDecimal,
-	name: String,
-	note: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
