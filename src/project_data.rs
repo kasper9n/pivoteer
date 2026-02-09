@@ -338,9 +338,12 @@ mod test {
 			AccountingData::open(&PathBuf::from("test/Internal data expected.json"))?;
 
 		assert_eq!(
-			project.data.accounting_period_results,
-			expected_data.accounting_period_results
+			project.data.accounting_period_results.len(),
+			expected_data.accounting_period_results.len(),
 		);
+		for (i, result) in project.data.accounting_period_results.iter().enumerate() {
+			assert_eq!(*result, expected_data.accounting_period_results[i]);
+		}
 		Ok(())
 	}
 }
