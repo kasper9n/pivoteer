@@ -3,26 +3,23 @@
 		{
 			"name": "1999 Q1",
 			"is_initial": true,
-			"is_locked": true,
+			"is_locked": false,
 			"revenue_voucher": [
-				{ "account": "revenue", "amount": "0" },
-			},
-			"recoupment_vouchers": [
-				{ "account": "recoupment:track:A", "amount": "-30" },
-				{ "account": "recoupment_expense", "amount": "30" },
+				{ "account": "revenue", "amount": "0" }
 			],
-			"track_distribution_vouchers": {
-				"A": [
-					{ "account": "track:A", "amount": "0" },
-					{ "account": "recoupment:track:A", "amount": "0" },
-					{ "account": "artist:Salvatore Ganacci", "amount": "0" },
-				],
-			},
+			"recoupment_vouchers": [
+				[
+					{ "account": "recoupment:track:AA9999999999", "amount": "-30" },
+					{ "account": "recoupment_expense", "amount": "30" }
+				]
+			],
+			"track_distribution_vouchers": {},
 			"closing_balances": {
 				"revenue": "0",
-				"recoupment:track:A": "-30",
-				"artist:Salvatore Ganacci": "0",
-			},
+				"recoupment:track:AA9999999999": "-30",
+				"recoupment_expense": "40",
+				"artist:Salvatore Ganacci": "0"
+			}
 		},
 		{
 			"name": "1999 Q2",
@@ -30,26 +27,29 @@
 			"is_locked": false,
 			"revenue_voucher": [
 				{ "account": "revenue", "amount": "-100" },
-				{ "account": "track:A", "amount": "100" },
-			},
+				{ "account": "track:AA9999999999", "amount": "100" }
+			],
 			"recoupment_vouchers": [
-				{
-					{ "account": "recoupment:track:A", "amount": "-10" },
-					{ "account": "recoupment_expense", "amount": "10" },
-				},
+				[
+					{ "account": "recoupment:track:AA9999999999", "amount": "-10" },
+					{ "account": "recoupment_expense", "amount": "10" }
+				]
 			],
 			"track_distribution_vouchers": {
 				"A": [
-					{ "account": "track:A", "amount": "-100" },
-					{ "account": "recoupment:track:A", "amount": "40" },
-					{ "account": "artist:Salvatore Ganacci", "amount": "60" },
-				],
+					{ "account": "track:AA9999999999", "amount": "-100" },
+					{ "account": "recoupment:track:AA9999999999", "amount": "40" },
+					{ "account": "label_royalty", "amount": "30" },
+					{ "account": "artist:Salvatore Ganacci", "amount": "60" }
+				]
 			},
 			"closing_balances": {
-				"revenue": "-100",
-				"recoupment:track:A": "0",
 				"artist:Salvatore Ganacci": "60",
-			},
-		},
+				"label_royalty": "30.00",
+				"recoupment:track:AA9999999999": "0",
+				"recoupment_expense": "40",
+				"revenue": "-100"
+			}
+		}
 	]
 }

@@ -33,7 +33,18 @@ impl AccountId {
 		}
 	}
 	pub fn validate(&self) -> Result<()> {
-		todo!("Validate ISRCs and UPCs, maybe even artist name");
+		match self {
+			AccountId::Track(isrc) => ensure!(is_valid_isrc(isrc), "Invalid ISRC: {isrc}"),
+			AccountId::RecoupmentTrack(isrc) => {
+				ensure!(is_valid_isrc(isrc), "Invalid ISRC: {isrc}")
+			}
+			AccountId::RecoupmentAlbum(upc) => ensure!(is_valid_upc(upc), "Invalid UPC: {upc}"),
+			AccountId::Revenue => {}
+			AccountId::RecoupmentExpense => {}
+			AccountId::LabelRoyalty => {}
+			AccountId::Artist(_) => {}
+		}
+		Ok(())
 	}
 }
 impl ToString for AccountId {
@@ -71,6 +82,20 @@ impl<'de> Deserialize<'de> for AccountId {
 	}
 }
 
+pub fn is_valid_isrc(isrc: &str) -> bool {
+	// Standard ISRC: 12 characters (e.g., USABC1234567)
+	// 2 alpha (country), 3 alpha-numeric (registrant), 2 digit (year), 5 digit (id)
+	isrc.len() == 12
+		&& isrc.chars().take(2).all(|c| c.is_ascii_alphabetic())
+		&& isrc.chars().skip(2).all(|c| c.is_ascii_alphanumeric())
+}
+
+pub fn is_valid_upc(upc: &str) -> bool {
+	// Standard UPC-A is 12 digits, EAN-13 is 13 digits.
+	// Most music distributors use the 12 or 13-digit format.
+	(upc.len() == 12 || upc.len() == 13) && upc.chars().all(|c| c.is_ascii_digit())
+}
+
 // pub struct Balance {
 // 	pub account: AccountId,
 // 	pub amount: BigDecimal,
@@ -80,6 +105,7 @@ impl<'de> Deserialize<'de> for AccountId {
 pub struct Entry {
 	pub account: AccountId,
 	pub amount: BigDecimal,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub note: Option<String>,
 }
 
@@ -91,17 +117,12 @@ pub struct Voucher {
 
 impl Voucher {
 	pub fn new_validated(entries: Vec<Entry>) -> Result<Self> {
-		ensure!(entries.len() >= 2, "Voucher must have at least 2 entries");
 		let voucher = Voucher { entries };
 		voucher.validate()?;
 		Ok(voucher)
 	}
 
 	pub fn validate(&self) -> Result<()> {
-		ensure!(
-			self.entries.len() >= 2,
-			"Voucher must have at least 2 entries"
-		);
 		let mut total = BigDecimal::from(0);
 		for entry in &self.entries {
 			total += &entry.amount;

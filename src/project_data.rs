@@ -188,7 +188,7 @@ impl AccountingPeriodResult {
 		let track = project.get_track(isrc).unwrap();
 
 		let album = project.get_album_containing_isrc(isrc);
-		let album_recoupment = album.map(|album| album.recoupment.is_some());
+		let album_recoupment = album.and_then(|a| a.recoupment.as_ref());
 
 		match (&track.recoupment, album_recoupment) {
 			(Some(_), None) => Some(AccountId::RecoupmentTrack(track.main_isrc.clone())),
@@ -316,7 +316,7 @@ mod test {
 		project.add_result(q2_result)?;
 
 		let expected_data =
-			AccountingData::open(&PathBuf::from("test/Internal data expected.json")).unwrap();
+			AccountingData::open(&PathBuf::from("test/Internal data expected.json"))?;
 
 		assert_eq!(
 			project.data.accounting_period_results,

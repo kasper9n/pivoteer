@@ -88,7 +88,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 					},
 					Entry {
 						account: AccountId::RecoupmentExpense,
-						amount: recoupment.expense.clone(),
+						amount: recoupment.recoup.clone(),
 						note: None,
 					},
 				];
