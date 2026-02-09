@@ -343,10 +343,10 @@ mod test {
 	fn test_generate_artist_statements() -> Result<()> {
 		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"))?;
 
-		let q1_result = generate(&mut project, &YearQuarter::parse("1999 Q1"))?;
+		let q1_result = generate(&project, &YearQuarter::parse("1999 Q1"))?;
 		project.add_result(q1_result)?;
 
-		let q2_result = generate(&mut project, &YearQuarter::parse("1999 Q2"))?;
+		let q2_result = generate(&project, &YearQuarter::parse("1999 Q2"))?;
 		project.add_result(q2_result)?;
 
 		// project.data.save(&project.data_file_path)?;

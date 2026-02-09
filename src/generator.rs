@@ -9,13 +9,13 @@ use crate::{
 use anyhow::{Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 
-pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
+pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
 	let period = project.get_accounting_period(&pname).unwrap();
 	let sales_report = period.generate_sales_report();
 	let track_sales_report = sales_report.into_track_sales_report(&project);
 	let revenue_voucher = create_revenue_voucher(&track_sales_report)?;
 
-	let recoupment_vouchers = create_recoupment_vouchers(&pname, &mut *project)?;
+	let recoupment_vouchers = create_recoupment_vouchers(&pname, &project)?;
 
 	let period = project.get_accounting_period(&pname).unwrap();
 	let mut result = AccountingPeriodResult {
@@ -71,7 +71,7 @@ fn create_revenue_voucher(track_sales_report: &TrackSalesReport) -> Result<Vouch
 	Ok(voucher)
 }
 
-fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Result<Vec<Voucher>> {
+fn create_recoupment_vouchers(pname: &YearQuarter, project: &Project) -> Result<Vec<Voucher>> {
 	let mut recoupment_vouchers: Vec<Voucher> = Vec::new();
 	for track in &project.tracks {
 		let recoupment_manifest = match &track.recoupment {
@@ -126,7 +126,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 
 fn distribute_track_revenue(
 	result: &AccountingPeriodResult,
-	project: &mut Project,
+	project: &Project,
 	isrc: &str,
 	revenue: &BigDecimal,
 ) -> Result<Voucher> {

@@ -88,7 +88,7 @@ fn main() -> Result<()> {
 
 		Commands::Generate(args) => {
 			let pname = YearQuarter::parse(&args.accounting_period_name);
-			let result = generator::generate(&mut project, &pname)?;
+			let result = generator::generate(&project, &pname)?;
 
 			if args.save {
 				project.add_and_save_result(result)?;
@@ -103,7 +103,7 @@ fn main() -> Result<()> {
 			let periods = project.accounting_periods.clone();
 			for accounting_period in periods {
 				let end_now = accounting_period.name == pname;
-				let result = generator::generate(&mut project, &pname)?;
+				let result = generator::generate(&project, &pname)?;
 
 				project.add_result(result)?;
 				if args.save {
