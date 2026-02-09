@@ -10,6 +10,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::iter::once;
 use std::path::{Path, PathBuf};
+use std::slice;
 use std::str::FromStr;
 
 pub fn pct_to_factor(share: &BigDecimal) -> BigDecimal {
@@ -136,6 +137,27 @@ impl AccountingPeriodResult {
 				.entry(account)
 				.or_insert(BigDecimal::zero());
 			*closing_balance += &balance_change;
+		}
+
+		// Add closing balances for artists with recoupments, but without royalties
+		for voucher in &self.recoupment_vouchers {
+			for entry in &voucher.entries {
+				let isrcs = match &entry.account {
+					AccountId::RecoupmentTrack(isrc) => slice::from_ref(isrc),
+					AccountId::RecoupmentAlbum(upc) => {
+						let album = project.get_album(upc).unwrap();
+						album.isrcs.as_slice()
+					}
+					_ => continue,
+				};
+				for isrc in isrcs {
+					let track = project.get_track(isrc).unwrap();
+					for split in &track.splits {
+						let account_id = AccountId::Artist(split.name.clone());
+						closing_balances.entry(account_id.to_string()).or_default();
+					}
+				}
+			}
 		}
 
 		closing_balances
