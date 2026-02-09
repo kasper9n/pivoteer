@@ -3,7 +3,7 @@ use anyhow::{bail, ensure, Result};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum AccountId {
 	Revenue,
 	Track(String),

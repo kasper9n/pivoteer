@@ -126,15 +126,32 @@ impl AccountingPeriodResult {
 				.expect("Could not find previous result"),
 		)
 	}
-	pub fn get_closing_balances(&self, project: &Project) -> HashMap<String, BigDecimal> {
+	pub fn get_closing_balances(&self, project: &Project) -> Result<HashMap<String, BigDecimal>> {
 		let prev_result = self.prev_result(project);
 		let prev_closing_balances = prev_result.map(|r| r.closing_balances.clone());
 
 		let mut closing_balances = prev_closing_balances.unwrap_or_default();
 
 		for (account, balance_change) in self.get_balance_changes() {
+			let is_clearing_accout = match account {
+				AccountId::Revenue => false,
+				AccountId::Track(_) => true,
+				AccountId::RecoupmentTrack(_) => false,
+				AccountId::RecoupmentAlbum(_) => false,
+				AccountId::RecoupmentExpense => false,
+				AccountId::LabelRoyalty => false,
+				AccountId::Artist(_) => false,
+			};
+			if is_clearing_accout {
+				// Skip "clearing" accounts, which are intermeadiates just for moving balances around
+				ensure!(
+					balance_change == BigDecimal::zero(),
+					"Clearing account balance must be zero"
+				);
+				continue;
+			}
 			let closing_balance = closing_balances
-				.entry(account)
+				.entry(account.to_string())
 				.or_insert(BigDecimal::zero());
 			*closing_balance += &balance_change;
 		}
@@ -160,9 +177,9 @@ impl AccountingPeriodResult {
 			}
 		}
 
-		closing_balances
+		Ok(closing_balances)
 	}
-	pub fn get_balance_changes(&self) -> HashMap<String, BigDecimal> {
+	pub fn get_balance_changes(&self) -> HashMap<AccountId, BigDecimal> {
 		let mut balance_changes = HashMap::new();
 		let vouchers = once(&self.revenue_voucher)
 			.chain(self.recoupment_vouchers.iter())
@@ -170,7 +187,7 @@ impl AccountingPeriodResult {
 		for voucher in vouchers {
 			for entry in &voucher.entries {
 				let balance_change = balance_changes
-					.entry(entry.account.to_string())
+					.entry(entry.account.clone())
 					.or_insert(BigDecimal::zero());
 				*balance_change += &entry.amount;
 			}

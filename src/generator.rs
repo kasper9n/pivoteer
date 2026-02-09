@@ -38,7 +38,7 @@ pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<Accounting
 		);
 	}
 
-	result.closing_balances = result.get_closing_balances(&project);
+	result.closing_balances = result.get_closing_balances(&project)?;
 	result.validate()?;
 
 	Ok(result)
