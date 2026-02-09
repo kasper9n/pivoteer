@@ -180,7 +180,7 @@ fn distribute_track_revenue(
 			note: None,
 		});
 		let artists_share = BigDecimal::from(100) - &track.label_share;
-		let artists_splittable_royalties = splittable_royalties * artists_share;
+		let artists_splittable_royalties = splittable_royalties * pct_to_factor(&artists_share);
 		for split in &track.splits {
 			entries.push(Entry {
 				account: AccountId::Artist(split.name.clone()),
@@ -190,6 +190,6 @@ fn distribute_track_revenue(
 		}
 	}
 
-	let voucher = Voucher { entries };
+	let voucher = Voucher::new_validated(entries)?;
 	Ok(voucher)
 }
