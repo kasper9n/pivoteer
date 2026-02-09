@@ -39,6 +39,7 @@ pub fn generate(project: &mut Project, pname: &YearQuarter) -> Result<Accounting
 	}
 
 	result.closing_balances = result.get_closing_balances(&project);
+	result.validate()?;
 
 	Ok(result)
 }
@@ -95,7 +96,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 						note: None,
 					},
 					Entry {
-						account: AccountId::Expense,
+						account: AccountId::RecoupmentExpense,
 						amount: recoupment.expense.clone(),
 						note: None,
 					},
@@ -124,7 +125,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &mut Project) -> Res
 						note: None,
 					},
 					Entry {
-						account: AccountId::Expense,
+						account: AccountId::RecoupmentExpense,
 						amount: recoupment.expense.clone(),
 						note: None,
 					},

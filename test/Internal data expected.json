@@ -35,7 +35,7 @@
 			"recoupment_vouchers": [
 				{
 					{ "account": "recoupment:track:A", "amount": "-10" },
-					{ "account": "expense", "amount": "10" },
+					{ "account": "recoupment_expense", "amount": "10" },
 				},
 			],
 			"track_distribution_vouchers": {

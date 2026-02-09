@@ -29,6 +29,7 @@ impl Project {
 	pub fn load(manifest_path: PathBuf) -> Result<Self> {
 		let project_dir = manifest_path.parent().unwrap().to_owned();
 		let manifest = Manifest::from_path(manifest_path);
+		manifest.verify()?;
 		let accounting_periods = manifest
 			.accounting_periods
 			.iter()
@@ -184,11 +185,9 @@ impl Project {
 
 		let mut accounting_periods_iter = self.accounting_periods.iter().enumerate().peekable();
 		while let Some((i, accounting_period)) = accounting_periods_iter.next() {
-			if i == 0 {
-				ensure!(
-					accounting_period.is_initial == true,
-					"First accounting period must have is_initial set to true"
-				);
+			match accounting_period.is_initial {
+				true => ensure!(i == 0, "First accounting period not is_initial"),
+				false => ensure!(i != 0, "Non-first accounting period with is_initial"),
 			}
 			if let Some((_, next_accounting_period)) = accounting_periods_iter.peek() {
 				ensure!(

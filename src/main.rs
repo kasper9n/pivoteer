@@ -126,7 +126,7 @@ fn main() -> Result<()> {
 				.get_accounting_result(&pname)
 				.context("No result")?;
 			let file_name = result.name.to_string() + ".json";
-			let export = result.export();
+			let export = result.export(&project);
 			export.save_to_downloads(file_name)?;
 			return Ok(());
 		}

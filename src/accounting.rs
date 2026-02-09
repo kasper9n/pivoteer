@@ -9,7 +9,7 @@ pub enum AccountId {
 	Track(String),
 	RecoupmentTrack(String),
 	RecoupmentAlbum(String),
-	Expense,
+	RecoupmentExpense,
 	LabelRoyalty,
 	Artist(String),
 }
@@ -23,8 +23,8 @@ impl AccountId {
 			Ok(AccountId::RecoupmentTrack(isrc.to_string()))
 		} else if let Some(upc) = s.strip_prefix("recoupment:album:") {
 			Ok(AccountId::RecoupmentAlbum(upc.to_string()))
-		} else if s == "expense" {
-			Ok(AccountId::Expense)
+		} else if s == "recoupment_expense" {
+			Ok(AccountId::RecoupmentExpense)
 		} else if s == "label_royalty" {
 			Ok(AccountId::LabelRoyalty)
 		} else if let Some(name) = s.strip_prefix("artist:") {
@@ -44,7 +44,7 @@ impl ToString for AccountId {
 			AccountId::Track(isrc) => format!("track:{}", isrc),
 			AccountId::RecoupmentTrack(isrc) => format!("recoupment:track:{}", isrc),
 			AccountId::RecoupmentAlbum(upc) => format!("recoupment:album:{}", upc),
-			AccountId::Expense => format!("expense"),
+			AccountId::RecoupmentExpense => format!("recoupment_expense"),
 			AccountId::LabelRoyalty => format!("label_royalty"),
 			AccountId::Artist(name) => format!("artist:{}", name),
 		}

@@ -1,7 +1,7 @@
 use crate::accounting::{sum_account_vouchers, AccountId, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize, Serializer};
@@ -41,6 +41,25 @@ impl AccountingData {
 		}
 		if accounting_periods.len() < result_periods.len() {
 			panic!("Accounting periods sales/result mismatch");
+		}
+
+		for (i, accounting_period) in self.accounting_period_results.iter().enumerate() {
+			match accounting_period.is_initial {
+				true => ensure!(i == 0, "First accounting period must have is_initial"),
+				false => ensure!(i > 0, "Only first accounting period must have is_initial"),
+			}
+		}
+
+		for pairs in self.accounting_period_results.windows(2) {
+			if let [last, current] = pairs {
+				if last.is_locked && !current.is_locked {
+					bail!("Invalid: Found an open period after locked one.");
+				}
+			}
+		}
+
+		for result in &self.accounting_period_results {
+			result.validate()?;
 		}
 
 		Ok(())
@@ -89,6 +108,18 @@ pub struct AccountingPeriodResult {
 }
 
 impl AccountingPeriodResult {
+	pub fn validate(&self) -> Result<()> {
+		for (account, balance) in &self.closing_balances {
+			let account = AccountId::parse(account).unwrap();
+			match account {
+				AccountId::Track(_) => {
+					assert!(balance == 0, "Track closing balance must be zero")
+				}
+				_ => {}
+			}
+		}
+		Ok(())
+	}
 	pub fn prev_result<'a>(&self, project: &'a Project) -> Option<&'a AccountingPeriodResult> {
 		let prev_name = self.name.get_prev();
 		if self.is_initial {
@@ -278,7 +309,8 @@ struct ArtistTrackStatementExport {
 
 #[cfg(test)]
 mod test {
-	use crate::project::Project;
+	use crate::generator::generate;
+	use crate::project::{Project, YearQuarter};
 	use crate::project_data::AccountingData;
 	use anyhow::Result;
 	use pretty_assertions::assert_eq;
@@ -286,18 +318,12 @@ mod test {
 
 	#[test]
 	fn test_generate_artist_statements() -> Result<()> {
-		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"));
+		let mut project = Project::load(PathBuf::from("test/Manifest.jsonc"))?;
 
-		let q1_result = project
-			.get_accounting_period("1999 Q1")
-			.unwrap()
-			.generate_result(&project)?;
+		let q1_result = generate(&mut project, &YearQuarter::parse("1999 Q1"))?;
 		project.add_result(q1_result)?;
 
-		let q2_result = project
-			.get_accounting_period("1999 Q2")
-			.unwrap()
-			.generate_result(&project)?;
+		let q2_result = generate(&mut project, &YearQuarter::parse("1999 Q2"))?;
 		project.add_result(q2_result)?;
 
 		let expected_data =

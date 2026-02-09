@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use bigdecimal::{BigDecimal, Signed};
 use deser_hjson;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,16 @@ impl Manifest {
 		prohibit_number_values(&value);
 
 		deser_hjson::from_str(&file_str).unwrap()
+	}
+	pub fn verify(&self) -> Result<()> {
+		for (i, accounting_period) in self.accounting_periods.iter().enumerate() {
+			match accounting_period.is_initial {
+				Some(true) => ensure!(i == 0, "First accounting period must have is_initial"),
+				None => ensure!(i > 0, "Only first accounting period must have is_initial"),
+				Some(false) => bail!("is_initial cannot be false"),
+			}
+		}
+		Ok(())
 	}
 	pub fn all_tracks(&self) -> Vec<Track> {
 		self.catalog
@@ -152,7 +162,7 @@ impl RecoupmentManifest {
 		for recoupment in &self.recoupments {
 			total_recoup += &recoupment.recoup;
 			total_expenses += &recoupment.expense;
-			ensure!(total_recoup >= 0,);
+			ensure!(total_recoup >= 0);
 			ensure!(total_expenses >= 0);
 			ensure!(
 				recoupment.recoup <= recoupment.expense,
