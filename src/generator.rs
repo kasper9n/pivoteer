@@ -153,9 +153,18 @@ fn distribute_track_revenue(
 		if let Some(recoupment_balance) = recoupment_balance {
 			match recoupment_account {
 				AccountId::RecoupmentTrack(_) => {
-					// Recoupment balance is negative because it's a future receivable amount
+					// Recoupment balance is generally negative because it's a future receivable amount
 					let recoupables = -recoupment_balance;
-					if remaining > 0 && recoupables > 0 {
+					if recoupables < 0 {
+						// The recoupables were negative, e.g a refund
+						remaining -= &recoupables;
+						entries.push(Entry {
+							account: AccountId::RecoupmentTrack(isrc.to_string()),
+							amount: recoupables,
+							note: None,
+						});
+					} else if remaining > 0 && recoupables > 0 {
+						// There is an amount that can be recouped
 						let amount_to_recoup = BigDecimal::min(remaining.clone(), recoupables);
 						remaining -= &amount_to_recoup;
 						entries.push(Entry {
@@ -165,7 +174,7 @@ fn distribute_track_revenue(
 						});
 					}
 				}
-				AccountId::RecoupmentAlbum(_) => todo!("Album recoupment not implemented yet"),
+				AccountId::RecoupmentAlbum(_) => todo!("Album recoupment not implemented yet. When implemented: If a song with 3 tracks gets 10$ in royalties, we can distribute 3.33$ to each artist and keep a 0.01$ in the track account."),
 				_ => panic!(),
 			}
 		}

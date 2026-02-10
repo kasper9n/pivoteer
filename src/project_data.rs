@@ -105,9 +105,8 @@ impl AccountingPeriodResult {
 		for (account, balance) in &self.closing_balances {
 			let account = AccountId::parse(account).unwrap();
 			match account {
-				AccountId::Track(_) => {
-					assert!(balance == 0, "Track closing balance must be zero")
-				}
+				AccountId::Track(_) => assert!(balance == 0, "Track closing balance must be zero"),
+				AccountId::RecoupmentTrack(_) | AccountId::RecoupmentAlbum(_) => ensure!(balance <= 0, "Recoupment balances cannot be posivite ({balance}). If a recoupment was refunded, it must be distributed between the label and artists. It may be that there were no royalties, causing there to not be any distribution voucher created"),
 				_ => {}
 			}
 		}
