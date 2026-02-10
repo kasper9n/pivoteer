@@ -57,7 +57,9 @@ fn create_revenue_voucher(track_sales_report: &TrackSalesReport) -> Result<Vouch
 
 	let mut entries = vec![revenue_entry];
 
-	for (_, track) in &track_sales_report.tracks {
+	let mut sorted_track_sales_report: Vec<_> = track_sales_report.tracks.values().collect();
+	sorted_track_sales_report.sort_by_key(|t| &t.isrc);
+	for track in sorted_track_sales_report {
 		let track_account_id = AccountId::Track(track.isrc.clone());
 		let track_entry = Entry {
 			account: track_account_id,

@@ -359,7 +359,11 @@ mod test {
 			expected_data.accounting_period_results.len(),
 		);
 		for (i, result) in project.data.accounting_period_results.iter().enumerate() {
-			assert_eq!(*result, expected_data.accounting_period_results[i]);
+			// Serialize to check for trailing zeroes, and for proper diff sorting
+			let result_str = serde_json::to_string_pretty(&result).unwrap();
+			let expected_srt =
+				serde_json::to_string_pretty(&expected_data.accounting_period_results[i]).unwrap();
+			assert_eq!(result_str, expected_srt);
 		}
 		Ok(())
 	}

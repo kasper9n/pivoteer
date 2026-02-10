@@ -17,10 +17,10 @@ anyhow = { version = "1.0", features = ["backtrace"] }
 clap = { version = "4.3", features = ["derive"] }
 maplit = "1.0"
 dirs-next = "2.0"
-pretty_assertions = "1.4"
 numeric-sort = "0.1"
 # deser_hjson shows error line/column numbers. other hjson/jsonc crates don't
 deser-hjson = "2.2"
+pretty_assertions = "1.4.1"
 
 [profile.dev]
 opt-level = 1
