@@ -155,6 +155,11 @@ impl AccountingPeriodResult {
 			*closing_balance += &balance_change;
 		}
 
+		for (_, balance) in &mut closing_balances {
+			// Prevent trailing zeroes
+			*balance = balance.normalized();
+		}
+
 		Ok(closing_balances)
 	}
 	pub fn get_balance_changes(&self) -> HashMap<AccountId, BigDecimal> {

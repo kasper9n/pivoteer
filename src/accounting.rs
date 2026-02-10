@@ -118,7 +118,11 @@ pub struct Voucher {
 }
 
 impl Voucher {
-	pub fn new_validated(entries: Vec<Entry>) -> Result<Self> {
+	pub fn new_validated(mut entries: Vec<Entry>) -> Result<Self> {
+		for entry in &mut entries {
+			// Prevent trailing zeroes
+			entry.amount = entry.amount.normalized();
+		}
 		let voucher = Voucher { entries };
 		voucher.validate()?;
 		Ok(voucher)
