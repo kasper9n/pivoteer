@@ -95,6 +95,7 @@ pub struct AccountingPeriodResult {
 	pub is_locked: bool,
 	pub revenue_voucher: Voucher,
 	pub recoupment_vouchers: Vec<Voucher>,
+	#[serde(serialize_with = "sorted_map")]
 	pub track_distribution_vouchers: HashMap<String, Voucher>,
 	#[serde(serialize_with = "sorted_map")]
 	pub closing_balances: HashMap<String, BigDecimal>,
