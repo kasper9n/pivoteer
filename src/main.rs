@@ -103,7 +103,7 @@ fn main() -> Result<()> {
 			let periods = project.accounting_periods.clone();
 			for accounting_period in periods {
 				let end_now = accounting_period.name == pname;
-				let result = generator::generate(&project, &pname)?;
+				let result = generator::generate(&project, &accounting_period.name)?;
 
 				project.add_result(result)?;
 				if args.save {

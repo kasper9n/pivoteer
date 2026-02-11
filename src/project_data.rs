@@ -122,7 +122,10 @@ impl AccountingPeriodResult {
 			project
 				.data
 				.get_accounting_result(&prev_name)
-				.expect("Could not find previous result"),
+				.expect(&format!(
+					"Could not find previous result {}",
+					prev_name.to_string()
+				)),
 		)
 	}
 	pub fn get_closing_balances(&self, project: &Project) -> Result<HashMap<String, BigDecimal>> {
