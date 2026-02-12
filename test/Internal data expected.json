@@ -4,61 +4,53 @@
 			"name": "1999 Q1",
 			"is_initial": true,
 			"is_locked": false,
-			"revenue_voucher": [
-				{"account":"revenue","amount":"-40"},
-				{"account":"track:BB9999999999","amount":"40"}
-			],
 			"recoupment_vouchers": [
 				[
 					{"account":"recoupment:track:AA9999999999","amount":"-30"},
-					{"account":"recoupment_expense","amount":"30"}
+					{"account":"expense:recoupable:track:AA9999999999","amount":"30"}
 				],
 				[
 					{"account":"recoupment:track:BB9999999999","amount":"-40"},
-					{"account":"recoupment_expense","amount":"40"}
+					{"account":"expense:recoupable:track:BB9999999999","amount":"40"}
 				]
 			],
 			"track_distribution_vouchers": {
 				"BB9999999999": [
-					{"account":"track:BB9999999999","amount":"-40"},
+					{"account":"revenue:track:BB9999999999","amount":"-40"},
 					{"account":"recoupment:track:BB9999999999","amount":"40"}
 				]
 			},
 			"closing_balances": {
-				"revenue": "-40",
+				"revenue:track:BB9999999999": "-40",
 				"recoupment:track:AA9999999999": "-30",
 				"recoupment:track:BB9999999999": "0",
-				"recoupment_expense": "70"
+				"expense:recoupable:track:AA9999999999": "30",
+				"expense:recoupable:track:BB9999999999": "40"
 			}
 		},
 		{
 			"name": "1999 Q2",
 			"is_initial": false,
 			"is_locked": false,
-			"revenue_voucher": [
-				{"account":"revenue","amount":"-100"},
-				{"account":"track:AA9999999999","amount":"100"},
-				{"account":"track:BB9999999999","amount":"0"}
-			],
 			"recoupment_vouchers": [
 				[
 					{"account":"recoupment:track:AA9999999999","amount":"-10"},
-					{"account":"recoupment_expense","amount":"10"}
+					{"account":"expense:recoupable:track:AA9999999999","amount":"10"}
 				],
 				[
 					{"account":"recoupment:track:BB9999999999","amount":"40"},
-					{"account":"recoupment_expense","amount":"-40"}
+					{"account":"expense:recoupable:track:BB9999999999","amount":"-40"}
 				]
 			],
 			"track_distribution_vouchers": {
 				"AA9999999999": [
-					{"account":"track:AA9999999999","amount":"-100"},
+					{"account":"revenue:track:AA9999999999","amount":"-100"},
 					{"account":"recoupment:track:AA9999999999","amount":"40"},
 					{"account":"label_royalty","amount":"30"},
 					{"account":"artist:Salvatore Ganacci","amount":"30"}
 				],
 				"BB9999999999": [
-					{"account":"track:BB9999999999","amount":"0"},
+					{"account":"revenue:track:BB9999999999","amount":"0"},
 					{"account":"recoupment:track:BB9999999999","amount":"-40"},
 					{"account":"label_royalty","amount":"20"},
 					{"account":"artist:Salvatore Ganacci","amount":"20"}
@@ -69,8 +61,10 @@
 				"label_royalty": "50",
 				"recoupment:track:AA9999999999": "0",
 				"recoupment:track:BB9999999999": "0",
-				"recoupment_expense": "40",
-				"revenue": "-140"
+				"expense:recoupable:track:AA9999999999": "40",
+				"expense:recoupable:track:BB9999999999": "0",
+				"revenue:track:AA9999999999": "-100",
+				"revenue:track:BB9999999999": "-40"
 			}
 		}
 	]
