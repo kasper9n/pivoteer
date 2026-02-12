@@ -4,7 +4,6 @@ use crate::{
 	accounting::{AccountId, Entry, Voucher},
 	project::{Project, YearQuarter},
 	project_data::{pct_to_factor, AccountingPeriodResult},
-	track_sales_report::TrackSalesReport,
 };
 use anyhow::{Context, Result};
 use bigdecimal::{BigDecimal, Zero};
@@ -13,7 +12,6 @@ pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeri
 	let period = project.get_accounting_period(&pname).unwrap();
 	let sales_report = period.generate_sales_report();
 	let track_sales_report = sales_report.into_track_sales_report(&project);
-	let revenue_voucher = create_revenue_voucher(&track_sales_report)?;
 
 	let recoupment_vouchers = create_recoupment_vouchers(&pname, &project)?;
 
@@ -22,7 +20,6 @@ pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeri
 		name: pname.clone(),
 		is_initial: period.is_initial,
 		is_locked: false,
-		revenue_voucher,
 		recoupment_vouchers,
 		track_distribution_vouchers: HashMap::new(),
 		closing_balances: HashMap::new(),
@@ -44,35 +41,6 @@ pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeri
 	Ok(result)
 }
 
-fn create_revenue_voucher(track_sales_report: &TrackSalesReport) -> Result<Voucher> {
-	let revenue_entry = Entry {
-		account: AccountId::Revenue,
-		amount: -track_sales_report
-			.tracks
-			.iter()
-			.map(|(_, t)| &t.gross_royalties)
-			.sum::<BigDecimal>(),
-		note: None,
-	};
-
-	let mut entries = vec![revenue_entry];
-
-	let mut sorted_track_sales_report: Vec<_> = track_sales_report.tracks.values().collect();
-	sorted_track_sales_report.sort_by_key(|t| &t.isrc);
-	for track in sorted_track_sales_report {
-		let track_account_id = AccountId::Track(track.isrc.clone());
-		let track_entry = Entry {
-			account: track_account_id,
-			amount: track.gross_royalties.clone(),
-			note: None,
-		};
-		entries.push(track_entry);
-	}
-
-	let voucher = Voucher::new_validated(entries)?;
-	Ok(voucher)
-}
-
 fn create_recoupment_vouchers(pname: &YearQuarter, project: &Project) -> Result<Vec<Voucher>> {
 	let mut recoupment_vouchers: Vec<Voucher> = Vec::new();
 	for track in &project.tracks {
@@ -89,7 +57,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &Project) -> Result<
 						note: None,
 					},
 					Entry {
-						account: AccountId::RecoupmentExpense,
+						account: AccountId::ExpenseRecoupableTrack(track.main_isrc.clone()),
 						amount: recoupment.recoup.clone(),
 						note: None,
 					},
@@ -113,7 +81,7 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &Project) -> Result<
 						note: None,
 					},
 					Entry {
-						account: AccountId::RecoupmentExpense,
+						account: AccountId::ExpenseRecoupableAlbum(album.upc.clone()),
 						amount: recoupment.recoup.clone(),
 						note: None,
 					},
@@ -136,7 +104,7 @@ fn distribute_track_revenue(
 
 	let mut entries = Vec::new();
 
-	let track_account_id = AccountId::Track(isrc.to_string());
+	let track_account_id = AccountId::RevenueTrack(isrc.to_string());
 	track_account_id.validate()?;
 	entries.push(Entry {
 		account: track_account_id,

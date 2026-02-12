@@ -1,4 +1,4 @@
-use crate::accounting::{sum_account_vouchers, AccountId, Voucher};
+use crate::accounting::{AccountId, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{bail, ensure, Context, Result};
@@ -8,7 +8,6 @@ use serde_json::value::RawValue;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::iter::once;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -93,7 +92,6 @@ pub struct AccountingPeriodResult {
 	pub name: YearQuarter,
 	pub is_initial: bool,
 	pub is_locked: bool,
-	pub revenue_voucher: Voucher,
 	pub recoupment_vouchers: Vec<Voucher>,
 	#[serde(serialize_with = "sorted_map")]
 	pub track_distribution_vouchers: HashMap<String, Voucher>,
@@ -106,7 +104,7 @@ impl AccountingPeriodResult {
 		for (account, balance) in &self.closing_balances {
 			let account = AccountId::parse(account).unwrap();
 			match account {
-				AccountId::Track(_) => assert!(balance == 0, "Track closing balance must be zero"),
+				AccountId::RevenueTrack(_) => assert!(balance <= 0, "Track revenue must be negative"),
 				AccountId::RecoupmentTrack(_) | AccountId::RecoupmentAlbum(_) => ensure!(balance <= 0, "Recoupment balances cannot be posivite ({balance}). If a recoupment was refunded, it must be distributed between the label and artists. It may be that there were no royalties, causing there to not be any distribution voucher created"),
 				_ => {}
 			}
@@ -136,11 +134,11 @@ impl AccountingPeriodResult {
 
 		for (account, balance_change) in self.get_balance_changes() {
 			let is_clearing_accout = match account {
-				AccountId::Revenue => false,
-				AccountId::Track(_) => true,
+				AccountId::RevenueTrack(_) => false,
 				AccountId::RecoupmentTrack(_) => false,
 				AccountId::RecoupmentAlbum(_) => false,
-				AccountId::RecoupmentExpense => false,
+				AccountId::ExpenseRecoupableTrack(_) => false,
+				AccountId::ExpenseRecoupableAlbum(_) => false,
 				AccountId::LabelRoyalty => false,
 				AccountId::Artist(_) => false,
 			};
@@ -167,8 +165,9 @@ impl AccountingPeriodResult {
 	}
 	pub fn get_balance_changes(&self) -> HashMap<AccountId, BigDecimal> {
 		let mut balance_changes = HashMap::new();
-		let vouchers = once(&self.revenue_voucher)
-			.chain(self.recoupment_vouchers.iter())
+		let vouchers = self
+			.recoupment_vouchers
+			.iter()
 			.chain(self.track_distribution_vouchers.values());
 		for voucher in vouchers {
 			for entry in &voucher.entries {
@@ -192,8 +191,9 @@ impl AccountingPeriodResult {
 
 		let mut closing_balance = prev_closing_balance.cloned();
 
-		let vouchers = once(&self.revenue_voucher)
-			.chain(self.recoupment_vouchers.iter())
+		let vouchers = self
+			.recoupment_vouchers
+			.iter()
 			.chain(self.track_distribution_vouchers.values());
 		for voucher in vouchers {
 			for entry in &voucher.entries {

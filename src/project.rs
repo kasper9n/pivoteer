@@ -426,9 +426,9 @@ struct SalesReportRecord {
 
 #[derive(Debug)]
 pub struct SalesReport {
+	pub accounting_period_name: YearQuarter,
 	pub isrc_map: HashMap<String, BigDecimal>,
 	pub upc_map: HashMap<String, BigDecimal>,
-	pub accounting_period_name: YearQuarter,
 }
 impl SalesReport {
 	fn from_csv_str(sales_report_csv: String, accounting_period_name: YearQuarter) -> Self {

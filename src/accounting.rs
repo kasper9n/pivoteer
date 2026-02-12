@@ -5,26 +5,26 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum AccountId {
-	Revenue,
-	Track(String),
+	RevenueTrack(String),
 	RecoupmentTrack(String),
 	RecoupmentAlbum(String),
-	RecoupmentExpense,
+	ExpenseRecoupableTrack(String),
+	ExpenseRecoupableAlbum(String),
 	LabelRoyalty,
 	Artist(String),
 }
 impl AccountId {
 	pub fn parse(s: &str) -> Result<Self> {
-		if s == "revenue" {
-			Ok(AccountId::Revenue)
-		} else if let Some(isrc) = s.strip_prefix("track:") {
-			Ok(AccountId::Track(isrc.to_string()))
+		if let Some(isrc) = s.strip_prefix("revenue:track:") {
+			Ok(AccountId::RevenueTrack(isrc.to_string()))
 		} else if let Some(isrc) = s.strip_prefix("recoupment:track:") {
 			Ok(AccountId::RecoupmentTrack(isrc.to_string()))
 		} else if let Some(upc) = s.strip_prefix("recoupment:album:") {
 			Ok(AccountId::RecoupmentAlbum(upc.to_string()))
-		} else if s == "recoupment_expense" {
-			Ok(AccountId::RecoupmentExpense)
+		} else if let Some(isrc) = s.strip_prefix("expense:recoupable:track:") {
+			Ok(AccountId::ExpenseRecoupableTrack(isrc.to_string()))
+		} else if let Some(isrc) = s.strip_prefix("expense:recoupable:album:") {
+			Ok(AccountId::ExpenseRecoupableAlbum(isrc.to_string()))
 		} else if s == "label_royalty" {
 			Ok(AccountId::LabelRoyalty)
 		} else if let Some(name) = s.strip_prefix("artist:") {
@@ -35,29 +35,26 @@ impl AccountId {
 	}
 	pub fn validate(&self) -> Result<()> {
 		match self {
-			AccountId::Track(isrc) => ensure!(is_valid_isrc(isrc), "Invalid ISRC: {isrc}"),
-			AccountId::RecoupmentTrack(isrc) => {
-				ensure!(is_valid_isrc(isrc), "Invalid ISRC: {isrc}")
-			}
-			AccountId::RecoupmentAlbum(upc) => ensure!(is_valid_upc(upc), "Invalid UPC: {upc}"),
-			AccountId::Revenue => {}
-			AccountId::RecoupmentExpense => {}
-			AccountId::LabelRoyalty => {}
-			AccountId::Artist(_) => {}
+			AccountId::RevenueTrack(isrc) => validte_isrc(isrc),
+			AccountId::RecoupmentTrack(isrc) => validte_isrc(isrc),
+			AccountId::RecoupmentAlbum(upc) => validate_upc(upc),
+			AccountId::ExpenseRecoupableTrack(isrc) => validte_isrc(isrc),
+			AccountId::ExpenseRecoupableAlbum(upc) => validate_upc(upc),
+			AccountId::LabelRoyalty => Ok(()),
+			AccountId::Artist(_) => Ok(()),
 		}
-		Ok(())
 	}
 }
 impl ToString for AccountId {
 	fn to_string(&self) -> String {
 		match self {
-			AccountId::Revenue => format!("revenue"),
-			AccountId::Track(isrc) => format!("track:{}", isrc),
-			AccountId::RecoupmentTrack(isrc) => format!("recoupment:track:{}", isrc),
-			AccountId::RecoupmentAlbum(upc) => format!("recoupment:album:{}", upc),
-			AccountId::RecoupmentExpense => format!("recoupment_expense"),
+			AccountId::RevenueTrack(isrc) => format!("revenue:track:{isrc}"),
+			AccountId::RecoupmentTrack(isrc) => format!("recoupment:track:{isrc}"),
+			AccountId::RecoupmentAlbum(upc) => format!("recoupment:album:{upc}"),
+			AccountId::ExpenseRecoupableTrack(isrc) => format!("expense:recoupable:track:{isrc}"),
+			AccountId::ExpenseRecoupableAlbum(isrc) => format!("expense:recoupable:album:{isrc}"),
 			AccountId::LabelRoyalty => format!("label_royalty"),
-			AccountId::Artist(name) => format!("artist:{}", name),
+			AccountId::Artist(name) => format!("artist:{name}"),
 		}
 	}
 }
@@ -83,18 +80,22 @@ impl<'de> Deserialize<'de> for AccountId {
 	}
 }
 
-pub fn is_valid_isrc(isrc: &str) -> bool {
+pub fn validte_isrc(isrc: &str) -> Result<()> {
 	// Standard ISRC: 12 characters (e.g., USABC1234567)
 	// 2 alpha (country), 3 alpha-numeric (registrant), 2 digit (year), 5 digit (id)
-	isrc.len() == 12
+	let is_valid = isrc.len() == 12
 		&& isrc.chars().take(2).all(|c| c.is_ascii_alphabetic())
-		&& isrc.chars().skip(2).all(|c| c.is_ascii_alphanumeric())
+		&& isrc.chars().skip(2).all(|c| c.is_ascii_alphanumeric());
+	ensure!(is_valid, "Invalid ISRc: {isrc}");
+	Ok(())
 }
 
-pub fn is_valid_upc(upc: &str) -> bool {
+pub fn validate_upc(upc: &str) -> Result<()> {
 	// Standard UPC-A is 12 digits, EAN-13 is 13 digits.
 	// Most music distributors use the 12 or 13-digit format.
-	(upc.len() == 12 || upc.len() == 13) && upc.chars().all(|c| c.is_ascii_digit())
+	let is_valid = (upc.len() == 12 || upc.len() == 13) && upc.chars().all(|c| c.is_ascii_digit());
+	ensure!(is_valid, "Invalid UPC: {upc}");
+	Ok(())
 }
 
 // pub struct Balance {
@@ -137,19 +138,19 @@ impl Voucher {
 		Ok(())
 	}
 }
-pub fn sum_account_vouchers(account: &AccountId, vouchers: &[Voucher]) -> Option<BigDecimal> {
-	let mut account_exists = false;
-	let mut sum = BigDecimal::from(0);
-	for voucher in vouchers {
-		for entry in &voucher.entries {
-			if entry.account == *account {
-				account_exists = true;
-				sum += &entry.amount;
-			}
-		}
-	}
-	match account_exists {
-		true => Some(sum),
-		false => None,
-	}
-}
+// pub fn sum_account_vouchers(account: &AccountId, vouchers: &[Voucher]) -> Option<BigDecimal> {
+// 	let mut account_exists = false;
+// 	let mut sum = BigDecimal::from(0);
+// 	for voucher in vouchers {
+// 		for entry in &voucher.entries {
+// 			if entry.account == *account {
+// 				account_exists = true;
+// 				sum += &entry.amount;
+// 			}
+// 		}
+// 	}
+// 	match account_exists {
+// 		true => Some(sum),
+// 		false => None,
+// 	}
+// }
