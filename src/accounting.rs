@@ -138,19 +138,19 @@ impl Voucher {
 		Ok(())
 	}
 }
-// pub fn sum_account_vouchers(account: &AccountId, vouchers: &[Voucher]) -> Option<BigDecimal> {
-// 	let mut account_exists = false;
-// 	let mut sum = BigDecimal::from(0);
-// 	for voucher in vouchers {
-// 		for entry in &voucher.entries {
-// 			if entry.account == *account {
-// 				account_exists = true;
-// 				sum += &entry.amount;
-// 			}
-// 		}
-// 	}
-// 	match account_exists {
-// 		true => Some(sum),
-// 		false => None,
-// 	}
-// }
+pub fn sum_account_vouchers(account: &AccountId, vouchers: &[Voucher]) -> Option<BigDecimal> {
+	let mut account_exists = false;
+	let mut sum = BigDecimal::from(0);
+	for voucher in vouchers {
+		for entry in &voucher.entries {
+			if entry.account == *account {
+				account_exists = true;
+				sum += &entry.amount;
+			}
+		}
+	}
+	match account_exists {
+		true => Some(sum),
+		false => None,
+	}
+}

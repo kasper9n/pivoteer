@@ -1,4 +1,4 @@
-use crate::accounting::{AccountId, Voucher};
+use crate::accounting::{sum_account_vouchers, AccountId, Voucher};
 use crate::project::{Project, YearQuarter};
 use crate::to_json_string_pretty;
 use anyhow::{bail, ensure, Context, Result};
@@ -243,34 +243,50 @@ impl AccountingPeriodResult {
 					.normalized(),
 				tracks: Vec::new(),
 			};
-			for (isrc, voucher) in &self.track_distribution_vouchers {
-				for entry in &voucher.entries {
-					match &entry.account {
-						AccountId::Artist(n) if n == artist_name => {
-							let net_royalties = entry.amount.clone();
-							let distributable_royalties: BigDecimal = voucher
-								.entries
-								.iter()
-								.map(|entry| match entry.account {
-									AccountId::LabelRoyalty => entry.amount.clone(),
-									AccountId::Artist(_) => entry.amount.clone(),
-									_ => BigDecimal::zero(),
-								})
-								.sum();
-							let track = project.get_track(isrc).unwrap();
-							let revenue_track_account = AccountId::RevenueTrack(isrc.clone());
-							let gross_royalties = -&balance_changes[&revenue_track_account];
-							artist_statement.tracks.push(ArtistTrackStatementExport {
-								isrc: isrc.clone(),
-								title: track.title.clone(),
-								gross_royalties: gross_royalties.normalized(),
-								payable_royalties: distributable_royalties.normalized(),
-								net_royalties: net_royalties.normalized(),
-							});
+			let artist_tracks: Vec<_> = project
+				.tracks
+				.iter()
+				.filter(|track| {
+					for split in &track.splits {
+						if split.name.as_str() == artist_name {
+							return true;
 						}
-						_ => continue,
 					}
-				}
+					false
+				})
+				.collect();
+			for artist_track in artist_tracks {
+				let isrc = &artist_track.main_isrc;
+				let distribution_voucher = match self.track_distribution_vouchers.get(isrc) {
+					Some(v) => v,
+					None => continue,
+				};
+				let net_royalties = {
+					sum_account_vouchers(
+						&AccountId::Artist(artist_name.clone()),
+						std::slice::from_ref(distribution_voucher),
+					)
+					.unwrap_or(BigDecimal::zero())
+				};
+				let distributable_royalties: BigDecimal = distribution_voucher
+					.entries
+					.iter()
+					.map(|entry| match entry.account {
+						AccountId::LabelRoyalty => entry.amount.clone(),
+						AccountId::Artist(_) => entry.amount.clone(),
+						_ => BigDecimal::zero(),
+					})
+					.sum();
+				let track = project.get_track(isrc).unwrap();
+				let revenue_track_account = AccountId::RevenueTrack(isrc.clone());
+				let gross_royalties = -&balance_changes[&revenue_track_account];
+				artist_statement.tracks.push(ArtistTrackStatementExport {
+					isrc: isrc.clone(),
+					title: track.title.clone(),
+					gross_royalties: gross_royalties.normalized(),
+					payable_royalties: distributable_royalties.normalized(),
+					net_royalties: net_royalties.normalized(),
+				});
 			}
 			artist_statement.tracks.sort_by(|a, b| {
 				b.net_royalties
