@@ -226,46 +226,58 @@ impl AccountingPeriodResult {
 		}
 	}
 	pub fn export(&self, project: &Project) -> Export {
+		let balance_changes = self.get_balance_changes();
 		let mut artist_statements = Vec::new();
-		for (account, balance) in &self.closing_balances {
-			let account_id = AccountId::parse(account).unwrap();
-			let artist_name = match account_id {
+		for (account_s, _balance) in &self.closing_balances {
+			let artist_account = AccountId::parse(account_s).unwrap();
+			let artist_name = match &artist_account {
 				AccountId::Artist(name) => name,
 				_ => continue,
 			};
 			let mut artist_statement = ArtistStatementExport {
 				payee: artist_name.clone(),
-				net_royalties: balance.clone(),
+				net_royalties: balance_changes
+					.get(&artist_account)
+					.cloned()
+					.unwrap_or(BigDecimal::zero())
+					.normalized(),
 				tracks: Vec::new(),
 			};
 			for (isrc, voucher) in &self.track_distribution_vouchers {
-				let track_account = AccountId::Track(isrc.clone());
 				for entry in &voucher.entries {
 					match &entry.account {
-						AccountId::Artist(n) if n == &artist_name => {
-							let gross_royalties = sum_account_vouchers(
-								&track_account,
-								&[self.revenue_voucher.clone()],
-							)
-							.expect("Track distribution entry has no track revenue voucher");
-							let payable_royalties = voucher
+						AccountId::Artist(n) if n == artist_name => {
+							let net_royalties = entry.amount.clone();
+							let distributable_royalties: BigDecimal = voucher
 								.entries
 								.iter()
-								.find(|e| e.account == AccountId::Track(isrc.clone()))
-								.expect("No track entry in distribution voucher");
+								.map(|entry| match entry.account {
+									AccountId::LabelRoyalty => entry.amount.clone(),
+									AccountId::Artist(_) => entry.amount.clone(),
+									_ => BigDecimal::zero(),
+								})
+								.sum();
 							let track = project.get_track(isrc).unwrap();
+							let revenue_track_account = AccountId::RevenueTrack(isrc.clone());
+							let gross_royalties = -&balance_changes[&revenue_track_account];
 							artist_statement.tracks.push(ArtistTrackStatementExport {
 								isrc: isrc.clone(),
 								title: track.title.clone(),
-								gross_royalties: gross_royalties.clone(),
-								payable_royalties: payable_royalties.amount.clone(),
-								net_royalties: entry.amount.clone(),
+								gross_royalties: gross_royalties.normalized(),
+								payable_royalties: distributable_royalties.normalized(),
+								net_royalties: net_royalties.normalized(),
 							});
 						}
 						_ => continue,
 					}
 				}
 			}
+			artist_statement.tracks.sort_by(|a, b| {
+				b.net_royalties
+					.cmp(&a.net_royalties)
+					.then_with(|| a.isrc.cmp(&b.isrc))
+					.then_with(|| panic!("Sort duplicate artist statement track"))
+			});
 			assert!(
 				artist_statement.net_royalties
 					== artist_statement
@@ -273,10 +285,17 @@ impl AccountingPeriodResult {
 						.iter()
 						.map(|t| &t.net_royalties)
 						.sum::<BigDecimal>(),
-				"Artist statement net royalties do not match"
+				"Artist statement net royalties do not match {}",
+				serde_json::to_string_pretty(&artist_statement).unwrap()
 			);
 			artist_statements.push(artist_statement);
 		}
+		artist_statements.sort_by(|a, b| {
+			b.net_royalties
+				.cmp(&a.net_royalties)
+				.then_with(|| b.payee.cmp(&a.payee))
+				.then_with(|| panic!("Sort duplicate artist statement"))
+		});
 		Export {
 			name: self.name.clone(),
 			is_initial: self.is_initial,
@@ -306,13 +325,13 @@ impl Export {
 		Ok(())
 	}
 }
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ArtistStatementExport {
 	payee: String,
 	net_royalties: BigDecimal,
 	tracks: Vec<ArtistTrackStatementExport>,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct ArtistTrackStatementExport {
 	pub isrc: String,
 	pub title: String,

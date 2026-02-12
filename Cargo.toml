@@ -11,13 +11,10 @@ csv-pipeline = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 regex = "1.9"
-csv-core = "0.1"
 rayon = "1.7"
 anyhow = { version = "1.0", features = ["backtrace"] }
 clap = { version = "4.3", features = ["derive"] }
-maplit = "1.0"
 dirs-next = "2.0"
-numeric-sort = "0.1"
 # deser_hjson shows error line/column numbers. other hjson/jsonc crates don't
 deser-hjson = "2.2"
 pretty_assertions = "1.4.1"
