@@ -3,7 +3,7 @@ use clap::{Args, Parser, Subcommand};
 use project::Project;
 use std::path::PathBuf;
 
-use crate::project::YearQuarter;
+use crate::{project::YearQuarter, project_data::save_to_downloads};
 
 mod accounting;
 mod generator;
@@ -33,6 +33,9 @@ enum Commands {
 	GenerateUpTo(GenerateUpTo),
 	/// Export already-generated accounting results
 	Export(Export),
+	/// Export already-generated accounting results for all accounting periods up
+	/// to the specified one
+	ExportUpTo(ExportUpTo),
 }
 
 #[derive(Args)]
@@ -61,6 +64,12 @@ struct GenerateUpTo {
 
 #[derive(Args)]
 struct Export {
+	/// Accounting period to generate results for
+	accounting_period_name: String,
+}
+
+#[derive(Args)]
+struct ExportUpTo {
 	/// Accounting period to generate results for
 	accounting_period_name: String,
 }
@@ -102,7 +111,10 @@ fn main() -> Result<()> {
 
 			let periods = project.accounting_periods.clone();
 			for accounting_period in periods {
-				let end_now = accounting_period.name == pname;
+				if accounting_period.prev_period() == pname {
+					break;
+				}
+
 				let result = generator::generate(&project, &accounting_period.name)?;
 
 				project.add_result(result)?;
@@ -110,10 +122,6 @@ fn main() -> Result<()> {
 					project.data.save(&project.data_file_path)?;
 				} else {
 					println!("Finished! Re-run with --save it all seems good");
-				}
-
-				if end_now {
-					break;
 				}
 			}
 		}
@@ -127,8 +135,36 @@ fn main() -> Result<()> {
 				.context("No result")?;
 			let file_name = result.name.to_string() + ".json";
 			let export = result.export(&project);
-			export.save_to_downloads(file_name)?;
-			return Ok(());
+			save_to_downloads(&export, file_name)?;
+		}
+
+		Commands::ExportUpTo(args) => {
+			let pname = YearQuarter::parse(&args.accounting_period_name);
+
+			let periods = project.accounting_periods.clone();
+			let first_name = periods.first().unwrap().name.clone();
+			let mut last_name = first_name.clone();
+			let mut exports = Vec::new();
+			for accounting_period in &periods {
+				if accounting_period.prev_period() == pname {
+					break;
+				}
+				last_name = accounting_period.name.clone();
+
+				let result = project
+					.data
+					.get_accounting_result(&accounting_period.name)
+					.context("No result")?;
+				let export = result.export(&project);
+				exports.push(export);
+			}
+
+			let file_name = format!(
+				"{} - {}.json",
+				first_name.to_string(),
+				last_name.to_string()
+			);
+			save_to_downloads(&exports, file_name)?;
 		}
 	}
 
