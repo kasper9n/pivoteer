@@ -8,7 +8,6 @@ use crate::{project::YearQuarter, project_data::save_to_downloads};
 mod accounting;
 mod generator;
 mod manifest;
-mod manifest_old;
 mod project;
 mod project_data;
 mod sources;
@@ -77,17 +76,6 @@ struct ExportUpTo {
 fn main() -> Result<()> {
 	let args = Cli::parse();
 	let manifest_path = args.manifest_path;
-
-	match args.command {
-		Commands::Migrate(arg) => {
-			let settings = manifest_old::Settings::from_path(manifest_path);
-			let manifest = settings.migrate();
-			let buf = to_json_string_pretty(&manifest)?;
-			std::fs::write(arg.destination_path, buf).context("Failed to write data file")?;
-			return Ok(());
-		}
-		_ => {}
-	}
 
 	let mut project = Project::load(PathBuf::from(manifest_path))?;
 	project.validate()?;
