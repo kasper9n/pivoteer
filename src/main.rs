@@ -135,7 +135,7 @@ fn main() -> Result<()> {
 				.context("No result")?;
 			let file_name = result.name.to_string() + ".json";
 			let export = result.export(&project);
-			save_to_downloads(&export, file_name)?;
+			save_to_downloads(&vec![export], file_name)?;
 		}
 
 		Commands::ExportUpTo(args) => {
