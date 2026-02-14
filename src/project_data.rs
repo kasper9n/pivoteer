@@ -5,7 +5,7 @@ use anyhow::{bail, ensure, Context, Result};
 use bigdecimal::{BigDecimal, Zero};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::value::RawValue;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -228,16 +228,34 @@ impl AccountingPeriodResult {
 	pub fn export(&self, project: &Project) -> Export {
 		let balance_changes = self.get_balance_changes();
 		let mut artist_statements = Vec::new();
+
+		let mut artist_names = HashSet::new();
 		for (account_s, _balance) in &self.closing_balances {
-			let artist_account = AccountId::parse(account_s).unwrap();
-			let artist_name = match &artist_account {
-				AccountId::Artist(name) => name,
-				_ => continue,
-			};
+			match AccountId::parse(account_s).unwrap() {
+				AccountId::Artist(artist_name) => {
+					artist_names.insert(artist_name.clone());
+				}
+				AccountId::ExpenseRecoupableTrack(isrc) | AccountId::RevenueTrack(isrc) => {
+					for split in &project.get_track(&isrc).unwrap().splits {
+						artist_names.insert(split.name.clone());
+					}
+				}
+				AccountId::ExpenseRecoupableAlbum(upc) => {
+					let album = project.get_album(&upc).unwrap();
+					for track in album.isrcs.as_slice() {
+						for split in &project.get_track(&track).unwrap().splits {
+							artist_names.insert(split.name.clone());
+						}
+					}
+				}
+				_ => {}
+			}
+		}
+		for artist_name in artist_names {
 			let mut artist_statement = ArtistStatementExport {
 				payee: artist_name.clone(),
 				net_royalties: balance_changes
-					.get(&artist_account)
+					.get(&AccountId::Artist(artist_name.clone()))
 					.cloned()
 					.unwrap_or(BigDecimal::zero())
 					.normalized(),
