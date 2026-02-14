@@ -16,7 +16,7 @@ mod track_sales_report;
 #[derive(Parser)]
 #[command(about, long_about)]
 struct Cli {
-	/// Path to .jsonc manifest file
+	/// Path to .json5 manifest file
 	manifest_path: PathBuf,
 	#[command(subcommand)]
 	command: Commands,
@@ -39,7 +39,7 @@ enum Commands {
 
 #[derive(Args)]
 struct Migrate {
-	/// Path to .jsonc manifest file
+	/// Path to .json5 manifest file
 	destination_path: PathBuf,
 }
 

@@ -1,6 +1,5 @@
 use anyhow::{bail, ensure, Result};
 use bigdecimal::{BigDecimal, Signed};
-use deser_hjson;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -19,10 +18,10 @@ impl Manifest {
 	pub fn from_path(file_path: PathBuf) -> Self {
 		let file_str = fs::read_to_string(&file_path).unwrap();
 
-		let value: serde_json::Value = deser_hjson::from_str(&file_str).unwrap();
+		let value: serde_json::Value = json5::from_str(&file_str).unwrap();
 		prohibit_number_values(&value);
 
-		deser_hjson::from_str(&file_str).unwrap()
+		json5::from_str(&file_str).unwrap()
 	}
 	pub fn verify(&self) -> Result<()> {
 		for (i, accounting_period) in self.accounting_periods.iter().enumerate() {
