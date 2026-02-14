@@ -139,7 +139,7 @@ impl Project {
 
 			if let Some(track_recoupment) = &track.recoupment {
 				track_recoupment
-					.validate(&track.max_recoup)
+					.validate()
 					.context(format!("Invalid recoupment for {}", track.title))?;
 			}
 		}
@@ -158,12 +158,8 @@ impl Project {
 				}
 			}
 
-			let max_recoup = &tracks[0].max_recoup;
-
 			for track in tracks {
 				if album.recoupment.is_some() {
-					ensure!(&track.max_recoup == max_recoup, "{}: Max recoup mismatch. Currently not supported to have different max_recoups per track", track.title);
-
 					ensure!(
 						track.recoupment.is_none(),
 						"Recoupment cannot be on both the track and it's album."
@@ -172,7 +168,7 @@ impl Project {
 			}
 
 			if let Some(album_recoupment) = &album.recoupment {
-				album_recoupment.validate(max_recoup)?;
+				album_recoupment.validate()?;
 			}
 		}
 		Ok(())

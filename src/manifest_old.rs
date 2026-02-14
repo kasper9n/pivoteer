@@ -75,8 +75,8 @@ impl Settings {
 				title: track.title,
 				label_share: track.label_share,
 				splits: track.splits,
-				max_recoup: track.max_recoup,
 				recoupment: Some(RecoupmentManifest {
+					max_recoup: track.max_recoup,
 					expenses: track.expenses,
 					recoup: track.recoup,
 					recoupments: track_recoupments

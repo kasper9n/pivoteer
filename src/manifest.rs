@@ -131,7 +131,6 @@ pub struct Track {
 	pub title: String,
 	pub label_share: BigDecimal,
 	pub splits: Vec<Split>,
-	pub max_recoup: BigDecimal,
 	#[serde(flatten)]
 	pub recoupment: Option<RecoupmentManifest>,
 }
@@ -151,12 +150,13 @@ impl Track {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RecoupmentManifest {
+	pub max_recoup: BigDecimal,
 	pub expenses: BigDecimal,
 	pub recoup: BigDecimal,
 	pub recoupments: Vec<RecoupableCost>,
 }
 impl RecoupmentManifest {
-	pub fn validate(&self, max_recoup: &BigDecimal) -> Result<()> {
+	pub fn validate(&self) -> Result<()> {
 		let mut total_recoup = BigDecimal::from(0);
 		let mut total_expenses = BigDecimal::from(0);
 		for recoupment in &self.recoupments {
@@ -170,7 +170,7 @@ impl RecoupmentManifest {
 				recoupment
 			);
 			ensure!(
-				&total_recoup <= max_recoup,
+				total_recoup <= self.max_recoup,
 				"Track recoupment exceeds max_recoup: {:?}",
 				recoupment
 			);
