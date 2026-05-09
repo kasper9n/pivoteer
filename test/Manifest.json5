@@ -40,34 +40,30 @@
 				{ date: "1999-04-15", expense: "-40", recoup: "-40", note: "Refund" },
 			],
 		},
-		// {
-		// 	upc: "2",
-		// 	title: "Ganacci Album",
-		// 	expenses: "0",
-		// 	recoup: "0",
-		// 	recoupments: [
-		// 		{
-		// 			date: "1999-01-01",
-		// 			expense: "40",
-		// 			recoup: "30",
-		// 			note: "Example",
-		// 		},
-		// 	],
-		// 	"tracks": [
-		// 		{
-		// 			isrc: "B",
-		// 			single_upcs: [],
-		// 			title: "Salvatore Ganacci - Fight Dirty",
-		// 			max_recoup: "0",
-		// 			expenses: "0",
-		// 			recoup: "0",
-		// 			label_share: "50",
-		// 			splits: [{ name: "Salvatore Ganacci", share: "100" }],
-		// 		},
-		// 	],
-		// },
 		{
 			upc: "3",
+			title: "Ganacci Album",
+			max_recoup: "100",
+			expenses: "10",
+			recoup: "10",
+			recoupments: [
+				{ date: "1999-01-01", expense: "10", recoup: "10", note: "Example" },
+			],
+			tracks: [
+				{
+					isrc: "CC9999999999",
+					single_upcs: [],
+					title: "Salvatore Ganacci - Fight Dirty",
+					max_recoup: "0",
+					expenses: "0",
+					recoup: "0",
+					label_share: "50",
+					splits: [{ name: "Salvatore Ganacci", share: "100" }],
+				},
+			],
+		},
+		{
+			upc: "4",
 			title: "An Album",
 			tracks: ["AA9999999999"],
 		},

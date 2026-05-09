@@ -12,18 +12,29 @@
 				[
 					{"account":"recoupment:track:BB9999999999","amount":"-40"},
 					{"account":"expense:recoupable:track:BB9999999999","amount":"40"}
+				],
+				[
+					{"account":"recoupment:album:3","amount":"-10"},
+					{"account":"expense:recoupable:album:3","amount":"10"}
 				]
 			],
 			"track_distribution_vouchers": {
 				"BB9999999999": [
 					{"account":"revenue:track:BB9999999999","amount":"-40"},
 					{"account":"recoupment:track:BB9999999999","amount":"40"}
-				]
+				],
+    		"CC9999999999": [
+      		{"account":"revenue:track:CC9999999999","amount":"-1.234"},
+					{"account":"recoupment:album:3","amount":"1.234"}
+    		]
 			},
 			"closing_balances": {
 				"revenue:track:BB9999999999": "-40",
+				"revenue:track:CC9999999999": "-1.234",
+				"recoupment:album:3": "-8.766",
 				"recoupment:track:AA9999999999": "-30",
 				"recoupment:track:BB9999999999": "0",
+				"expense:recoupable:album:3": "10",
 				"expense:recoupable:track:AA9999999999": "30",
 				"expense:recoupable:track:BB9999999999": "40"
 			}
@@ -47,24 +58,27 @@
 					{"account":"revenue:track:AA9999999999","amount":"-100"},
 					{"account":"recoupment:track:AA9999999999","amount":"40"},
 					{"account":"label_royalty","amount":"30"},
-					{"account":"artist:Salvatore Ganacci","amount":"30"}
+					{"account":"artist:Salvatore Ganacci","amount":"30" }
 				],
 				"BB9999999999": [
 					{"account":"revenue:track:BB9999999999","amount":"0"},
 					{"account":"recoupment:track:BB9999999999","amount":"-40"},
 					{"account":"label_royalty","amount":"20"},
-					{"account":"artist:Salvatore Ganacci","amount":"20"}
+					{"account":"artist:Salvatore Ganacci","amount":"20" }
 				]
 			},
 			"closing_balances": {
 				"artist:Salvatore Ganacci": "50",
 				"label_royalty": "50",
+				"recoupment:album:3": "-8.766",
 				"recoupment:track:AA9999999999": "0",
 				"recoupment:track:BB9999999999": "0",
+				"expense:recoupable:album:3": "10",
 				"expense:recoupable:track:AA9999999999": "40",
 				"expense:recoupable:track:BB9999999999": "0",
 				"revenue:track:AA9999999999": "-100",
-				"revenue:track:BB9999999999": "-40"
+				"revenue:track:BB9999999999": "-40",
+				"revenue:track:CC9999999999": "-1.234"
 			}
 		}
 	]

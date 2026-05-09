@@ -162,7 +162,8 @@ impl Project {
 				if album.recoupment.is_some() {
 					ensure!(
 						track.recoupment.is_none(),
-						"Recoupment cannot be on both the track and it's album."
+						"Recoupment cannot be on both the track and it's album. Track {}",
+						track.title
 					);
 				}
 			}

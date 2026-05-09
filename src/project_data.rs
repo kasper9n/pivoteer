@@ -225,6 +225,14 @@ impl AccountingPeriodResult {
 			}
 		}
 	}
+	pub fn insert_track_distribution_vouchers_fresh(&mut self, isrc: String, voucher: Voucher) {
+		let replaced = self.track_distribution_vouchers.insert(isrc, voucher);
+		assert!(
+			replaced.is_none(),
+			"Duplicate of track distribution voucher {:?}",
+			replaced
+		);
+	}
 	pub fn export(&self, project: &Project) -> Export {
 		let balance_changes = self.get_balance_changes();
 		let mut artist_statements = Vec::new();
