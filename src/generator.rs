@@ -124,7 +124,7 @@ fn distribute_track_revenue(
 					// Recoupment balance is generally negative because it's a future receivable amount
 					let recoupables = -recoupment_balance;
 					if recoupables < 0 {
-						// The recoupables were negative, e.g a refund
+						// The recoupables were negative, for example the expense was already recouped, but then refunded.
 						remaining -= &recoupables;
 						entries.push(Entry {
 							account: AccountId::RecoupmentTrack(isrc.to_string()),
