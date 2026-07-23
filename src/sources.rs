@@ -381,9 +381,18 @@ fn pretzel(file_path: &PathBuf) -> Pipeline<'_> {
 		])
 }
 
-fn skip_to_new_header(reader: csv::Reader<File>, n: usize) -> csv::Reader<File> {
+fn read_repost_header(reader: csv::Reader<File>) -> csv::Reader<File> {
 	let mut records = reader.into_records();
-	let header = records.nth(n).unwrap().unwrap();
+
+	let first = records.next().unwrap().unwrap();
+	let has_account_id_prefix = first.len() == 1 && first.get(0) == Some("Account ID");
+	let header = if has_account_id_prefix {
+		records.next();
+		records.next().unwrap().unwrap()
+	} else {
+		first
+	};
+
 	let mut reader = records.into_reader();
 	reader.set_headers(header);
 	reader
@@ -394,11 +403,12 @@ fn repost_network(file_path: &PathBuf) -> Pipeline<'_> {
 		Ok(file) => file,
 		Err(_) => panic!("Could not open file: {}", file_path.to_string_lossy()),
 	};
+
 	let reader = csv::ReaderBuilder::new()
 		.has_headers(false)
 		.flexible(true)
 		.from_reader(file);
-	let reader = skip_to_new_header(reader, 2);
+	let reader = read_repost_header(reader);
 	Pipeline::from_reader(reader)
 		.unwrap()
 		.rename_col("Reporting Period", "Activity Period")
