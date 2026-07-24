@@ -237,7 +237,7 @@ fn distribute_track_revenue(
 				AccountId::RecoupmentAlbum(upc) => {
 					let recoupables_from_album = recoup_amount_from_album.clone().unwrap();
 					ensure!(recoupables_from_album <= remaining);
-					ensure!(remaining > 0, "Todo: Negative royalties received when there's an album recoupment. In this case I think recoupments should be reverted, in order to not impact other tracks in the album.");
+					ensure!(remaining >= 0, "Todo: Negative royalties received when there's an album recoupment. In this case I think recoupments should be reverted, in order to not impact other tracks in the album.");
 					if recoupables_from_album < 0 {
 						// The recoupables were negative, for example the expense was already recouped, but then refunded.
 						todo!("Negative recoupables. How should that be handled?")
