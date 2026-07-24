@@ -21,7 +21,24 @@ impl Manifest {
 		let value: serde_json::Value = json5::from_str(&file_str).unwrap();
 		prohibit_number_values(&value);
 
-		json5::from_str(&file_str).unwrap()
+		let json_deserializer = &mut json5::Deserializer::from_str(&file_str);
+		let result: Result<Manifest, _> = serde_path_to_error::deserialize(json_deserializer);
+
+		let manifest = match result {
+			Ok(m) => m,
+			Err(err) => {
+				let inner = err.inner();
+				let snippet = extract_by_path(&file_str, err.path());
+				panic!(
+					"Error at {}:\n  {inner}\n\nOffending JSON:{}\n",
+					err.path().to_string(),
+					snippet
+						.map(|s| format!("\n{s}"))
+						.unwrap_or_else(|| " (could not extract)".into())
+				)
+			}
+		};
+		manifest
 	}
 	pub fn verify(&self) -> Result<()> {
 		for (i, accounting_period) in self.accounting_periods.iter().enumerate() {
@@ -50,6 +67,33 @@ impl Manifest {
 			})
 			.collect()
 	}
+}
+
+fn extract_by_path(json: &str, path: &serde_path_to_error::Path) -> Option<String> {
+	use serde_path_to_error::Segment;
+
+	let v: serde_json::Value = json5::from_str(json).unwrap();
+	let mut current = &v;
+
+	for segment in path {
+		match segment {
+			Segment::Map { key } => {
+				current = current.get(key).unwrap();
+			}
+			Segment::Seq { index } => {
+				current = current.get(*index).unwrap();
+			}
+			Segment::Enum { .. } => {
+				// Enum variant — current should already be the variant's data
+			}
+			Segment::Unknown => {
+				// Can't navigate further
+				return None;
+			}
+		}
+	}
+
+	serde_json::to_string_pretty(current).ok()
 }
 
 fn prohibit_number_values(value: &serde_json::Value) {
