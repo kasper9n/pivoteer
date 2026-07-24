@@ -44,14 +44,21 @@
 			upc: "3",
 			title: "Ganacci Album",
 			max_recoup: "100",
-			expenses: "10",
-			recoup: "10",
+			expenses: "100",
+			recoup: "100",
 			recoupments: [
-				{ date: "1999-01-01", expense: "10", recoup: "10", note: "Example" },
+				{ date: "1999-01-01", expense: "100", recoup: "100", note: "Example" },
 			],
 			tracks: [
 				{
 					isrc: "CC9999999999",
+					single_upcs: [],
+					title: "Salvatore Ganacci - Fight Dirty",
+					label_share: "50",
+					splits: [{ name: "Salvatore Ganacci", share: "100" }],
+				},
+				{
+					isrc: "DD9999999999",
 					single_upcs: [],
 					title: "Salvatore Ganacci - Fight Dirty",
 					label_share: "50",

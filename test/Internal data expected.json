@@ -14,27 +14,22 @@
 					{"account":"expense:recoupable:track:BB9999999999","amount":"40"}
 				],
 				[
-					{"account":"recoupment:album:3","amount":"-10"},
-					{"account":"expense:recoupable:album:3","amount":"10"}
+					{"account":"recoupment:album:3","amount":"-100"},
+					{"account":"expense:recoupable:album:3","amount":"100"}
 				]
 			],
 			"track_distribution_vouchers": {
 				"BB9999999999": [
 					{"account":"revenue:track:BB9999999999","amount":"-40"},
 					{"account":"recoupment:track:BB9999999999","amount":"40"}
-				],
-    		"CC9999999999": [
-      		{"account":"revenue:track:CC9999999999","amount":"-1.234"},
-					{"account":"recoupment:album:3","amount":"1.234"}
-    		]
+				]
 			},
 			"closing_balances": {
 				"revenue:track:BB9999999999": "-40",
-				"revenue:track:CC9999999999": "-1.234",
-				"recoupment:album:3": "-8.766",
+				"recoupment:album:3": "-100",
 				"recoupment:track:AA9999999999": "-30",
 				"recoupment:track:BB9999999999": "0",
-				"expense:recoupable:album:3": "10",
+				"expense:recoupable:album:3": "100",
 				"expense:recoupable:track:AA9999999999": "30",
 				"expense:recoupable:track:BB9999999999": "40"
 			}
@@ -65,20 +60,33 @@
 					{"account":"recoupment:track:BB9999999999","amount":"-40"},
 					{"account":"label_royalty","amount":"20"},
 					{"account":"artist:Salvatore Ganacci","amount":"20" }
-				]
+				],
+				"CC9999999999": [
+      		{"account":"revenue:track:CC9999999999","amount":"-200"},
+        	{"account":"recoupment:album:3","amount":"66.66666667"},
+					{"account":"label_royalty","amount":"66.666666665"},
+					{"account":"artist:Salvatore Ganacci","amount":"66.666666665"}
+      	],
+    		"DD9999999999": [
+      		{"account":"revenue:track:DD9999999999","amount":"-100"},
+	      	{"account":"recoupment:album:3","amount":"33.33333333"},
+					{"account":"label_royalty","amount":"33.333333335"},
+					{"account":"artist:Salvatore Ganacci","amount":"33.333333335"}
+    		]
 			},
 			"closing_balances": {
-				"artist:Salvatore Ganacci": "50",
-				"label_royalty": "50",
-				"recoupment:album:3": "-8.766",
+				"artist:Salvatore Ganacci": "150",
+				"label_royalty": "150",
+				"recoupment:album:3": "0",
 				"recoupment:track:AA9999999999": "0",
 				"recoupment:track:BB9999999999": "0",
-				"expense:recoupable:album:3": "10",
+				"expense:recoupable:album:3": "100",
 				"expense:recoupable:track:AA9999999999": "40",
 				"expense:recoupable:track:BB9999999999": "0",
 				"revenue:track:AA9999999999": "-100",
 				"revenue:track:BB9999999999": "-40",
-				"revenue:track:CC9999999999": "-1.234"
+				"revenue:track:CC9999999999": "-200",
+				"revenue:track:DD9999999999": "-100"
 			}
 		}
 	]

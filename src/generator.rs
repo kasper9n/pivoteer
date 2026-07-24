@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	str::FromStr,
+};
 
 use crate::{
 	accounting::{AccountId, Entry, Voucher},
@@ -6,7 +9,7 @@ use crate::{
 	project_data::{pct_to_factor, AccountingPeriodResult},
 };
 use anyhow::{ensure, Context, Result};
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::{BigDecimal, FromPrimitive, Zero};
 
 pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeriodResult> {
 	let period = project.get_accounting_period(&pname).unwrap();
@@ -61,67 +64,59 @@ pub fn generate(project: &Project, pname: &YearQuarter) -> Result<AccountingPeri
 		} else if total_album_recoupables >= total_album_revenue {
 			// Recoup 100%
 			for isrc in &album.isrcs {
-				let amount = remaining_tracks.remove(isrc).unwrap();
+				let track_sales = remaining_tracks.remove(isrc).unwrap();
 				let voucher = distribute_track_revenue(
 					&result,
 					project,
 					&isrc,
-					&amount.gross_royalties,
-					&Some(amount.gross_royalties.clone()),
+					&track_sales.gross_royalties,
+					&Some(track_sales.gross_royalties.clone()),
 				)?;
 				result.insert_track_distribution_vouchers_fresh(isrc.clone(), voucher);
 			}
 		} else if total_album_recoupables < total_album_revenue {
-			panic!("Recoup less than 100%. Make sure this works correctly!");
-			// let mut remainder = total_album_recoupables.clone();
+			let mut album_recoup_remainder = total_album_recoupables.clone();
+			let recoup_percent = total_album_recoupables / total_album_revenue;
 
-			// // Percent that should be recouped
-			// let album_recoup_percent = BigDecimal::min(
-			// 	// .round(8) is used for a tolerance check later
-			// 	(total_album_recoupables / total_album_revenue).round(8),
-			// 	// Max 100%
-			// 	BigDecimal::one(),
-			// );
-			// ensure!(album_recoup_percent >= 0);
+			for (i, isrc) in album.isrcs.iter().enumerate() {
+				let is_last = i == album.isrcs.len() - 1;
+				let track_sales = remaining_tracks.remove(isrc).unwrap();
+				if track_sales.gross_royalties < 0 {
+					todo!("Album recoupment processing where a track has negative sales. Not easy to implement. The track's previous royalties might have been recouped, but it also might not have been. The easy thing might be to just not undo anything.")
+				}
 
-			// for (i, isrc) in album.isrcs.iter().enumerate() {
-			// 	let amount = remaining_tracks.remove(&*isrc).unwrap();
-			// 	let is_last = i == album.isrcs.len() - 1;
-			// 	let normal_recoup_amount = amount.gross_royalties * album_recoup_percent;
-			// 	let amount_to_recoup = if !is_last {
-			// 		remainder -= amount.gross_royalties;
-			// 		normal_recoup_amount
-			// 	} else {
-			// 		ensure!(remainder <= amount.gross_royalties);
-			// 		if remainder != normal_recoup_amount {
-			// 			// tolerance is based on the .round(8)
-			// 			let diff = (&remainder - &normal_recoup_amount).abs();
-			// 			let tolerance = BigDecimal::from_str("0.000000005").unwrap()
-			// 				* &total_album_revenue * (&total_album_revenue
-			// 				- BigDecimal::one());
-			// 			assert!(
-			// 				diff <= tolerance,
-			// 				"Remainder diverges from the per-track amount. Code has some calculation issue",
-			// 				);
-			// 		}
-			// 		remainder
-			// 	};
-			// 	let voucher = distribute_track_revenue(
-			// 		&result,
-			// 		project,
-			// 		&isrc,
-			// 		&amount.gross_royalties,
-			// 		&Some(amount_to_recoup),
-			// 	)?;
-			// 	let replaced = result
-			// 		.track_distribution_vouchers
-			// 		.insert(isrc.clone(), voucher);
-			// 	assert!(
-			// 		replaced.is_none(),
-			// 		"Duplicate of track distribution voucher {:?}",
-			// 		replaced
-			// 	);
-			// }
+				// the .round(8) is used for a tolerance check later
+				let normal_recoup_amount =
+					(&track_sales.gross_royalties * &recoup_percent).round(8);
+				let track_recoup_amount = if !is_last {
+					album_recoup_remainder -= &normal_recoup_amount;
+					normal_recoup_amount
+				} else {
+					if album_recoup_remainder > track_sales.gross_royalties {
+						todo!("Recoupment due to rounding errors exceeds track's gross royalties");
+					}
+					if album_recoup_remainder != normal_recoup_amount {
+						// tolerance is based on the .round(8)
+						let diff = (&album_recoup_remainder - &normal_recoup_amount).abs();
+						let tolerance = BigDecimal::from_str("0.000000005").unwrap()
+							* BigDecimal::from_usize(album.isrcs.len()).unwrap();
+						assert!(
+							diff <= tolerance,
+							"Album recoup remainder diverges from the per-track amount. Code has some calculation issue",
+						);
+					}
+					album_recoup_remainder.clone()
+				};
+
+				let voucher = distribute_track_revenue(
+					&result,
+					project,
+					&isrc,
+					&track_sales.gross_royalties,
+					&Some(track_recoup_amount),
+				)?;
+				result.insert_track_distribution_vouchers_fresh(isrc.clone(), voucher);
+			}
 		}
 	}
 
@@ -245,7 +240,7 @@ fn distribute_track_revenue(
 					ensure!(remaining > 0, "Todo: Negative royalties received when there's an album recoupment. In this case I think recoupments should be reverted, in order to not impact other tracks in the album.");
 					if recoupables_from_album < 0 {
 						// The recoupables were negative, for example the expense was already recouped, but then refunded.
-						panic!("Negative recoupables. How should that be handled?")
+						todo!("Negative recoupables. How should that be handled?")
 					} else if remaining > 0 && recoupables_from_album > 0 {
 						remaining -= &recoupables_from_album;
 						entries.push(Entry {
@@ -260,6 +255,8 @@ fn distribute_track_revenue(
 		}
 	}
 
+	// Split track royalties between the label and artists. It's not possible to
+	// have a remainder here because the splits are multiplicative (e.g 1/3 can't happen)
 	let splittable_royalties = remaining;
 
 	if splittable_royalties != BigDecimal::zero() {
