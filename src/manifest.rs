@@ -54,7 +54,8 @@ impl Manifest {
 		Ok(())
 	}
 	pub fn all_tracks(&self) -> Vec<Track> {
-		self.catalog
+		let mut tracks: Vec<_> = self
+			.catalog
 			.iter()
 			.flat_map(|item| match item {
 				CatalogItem::Track(track) => vec![track.clone()],
@@ -68,7 +69,9 @@ impl Manifest {
 					})
 					.collect(),
 			})
-			.collect()
+			.collect();
+		tracks.sort_by(|a, b| a.main_isrc.cmp(&b.main_isrc));
+		tracks
 	}
 }
 

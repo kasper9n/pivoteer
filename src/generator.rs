@@ -158,7 +158,9 @@ fn create_recoupment_vouchers(pname: &YearQuarter, project: &Project) -> Result<
 			}
 		}
 	}
-	for album in project.albums.values() {
+	let mut sorted_albums: Vec<_> = project.albums.values().collect();
+	sorted_albums.sort_by_key(|a| &a.upc);
+	for album in sorted_albums {
 		let recoupment_manifest = match &album.recoupment {
 			Some(v) => v,
 			None => continue,
