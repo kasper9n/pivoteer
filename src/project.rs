@@ -84,14 +84,16 @@ impl Project {
 			.context("Failed to open internal data file")
 			.unwrap();
 
-		Ok(Project {
+		let project = Project {
 			data_file_path,
 			accounting_periods,
 			data,
 			tracks: all_tracks,
 			isrcs: track_map,
 			albums: album_map,
-		})
+		};
+		project.validate()?;
+		Ok(project)
 	}
 	pub fn validate(&self) -> Result<()> {
 		if !Path::exists(&self.data_file_path) {

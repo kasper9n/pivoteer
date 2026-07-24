@@ -18,8 +18,11 @@ impl Manifest {
 	pub fn from_path(file_path: PathBuf) -> Self {
 		let file_str = fs::read_to_string(&file_path).unwrap();
 
-		let value: serde_json::Value = json5::from_str(&file_str).unwrap();
-		prohibit_number_values(&value);
+		{
+			// discard the value, because we would lose error position information
+			let value: serde_json::Value = json5::from_str(&file_str).unwrap();
+			validate_manifest_json(&value, "");
+		}
 
 		let json_deserializer = &mut json5::Deserializer::from_str(&file_str);
 		let result: Result<Manifest, _> = serde_path_to_error::deserialize(json_deserializer);
@@ -96,20 +99,23 @@ fn extract_by_path(json: &str, path: &serde_path_to_error::Path) -> Option<Strin
 	serde_json::to_string_pretty(current).ok()
 }
 
-fn prohibit_number_values(value: &serde_json::Value) {
+fn validate_manifest_json(value: &serde_json::Value, path: &str) {
 	match value {
 		serde_json::Value::Number(_) => {
 			// https://github.com/akubera/bigdecimal-rs/issues/113
-			panic!("Number values are not allowed because they cause precision loss")
+			panic!("Number values are not allowed because they cause precision loss. Path: {path}");
 		}
 		serde_json::Value::Object(map) => {
-			for (_, value) in map {
-				prohibit_number_values(value);
+			for (key, value) in map {
+				let path = format!("{path}.{key}");
+				let path = path.trim_start_matches('.');
+				RecoupmentManifest::prohibit_partial_json(map, &*path);
+				validate_manifest_json(value, path);
 			}
 		}
 		serde_json::Value::Array(array) => {
-			for value in array {
-				prohibit_number_values(value);
+			for (i, value) in array.iter().enumerate() {
+				validate_manifest_json(value, &format!("{path}[{i}]"));
 			}
 		}
 		serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::String(_) => {}
@@ -117,6 +123,7 @@ fn prohibit_number_values(value: &serde_json::Value) {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+// deny_unknown_fields not supported with flatten
 pub struct AccountingPeriodManifest {
 	pub name: YearQuarter,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -133,6 +140,7 @@ pub enum SourceManifest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SourceDetailsManifest {
 	pub path: String,
 	pub eur_usd_rate: Option<BigDecimal>,
@@ -147,7 +155,7 @@ pub enum CatalogItem {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// deny_unknown_fields not supported with flatten
 pub struct AlbumManifest {
 	pub upc: String,
 	pub title: String,
@@ -164,7 +172,7 @@ pub enum AlbumTrack {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// deny_unknown_fields not supported with flatten
 pub struct Track {
 	#[serde(rename = "isrc")]
 	pub main_isrc: String,
@@ -192,6 +200,7 @@ impl Track {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+// deny_unknown_fields not supported with flatten
 pub struct RecoupmentManifest {
 	pub max_recoup: BigDecimal,
 	pub expenses: BigDecimal,
@@ -199,6 +208,22 @@ pub struct RecoupmentManifest {
 	pub recoupments: Vec<RecoupableCost>,
 }
 impl RecoupmentManifest {
+	pub fn prohibit_partial_json(map: &serde_json::Map<String, serde_json::Value>, path: &str) {
+		if map.contains_key("recoup") && map.contains_key("date") {
+			// allow RecoupableCost
+			return;
+		}
+		let recoup_keys = ["max_recoup", "expenses", "recoup", "recoupments"];
+		let mut count = 0;
+		for key in map.keys() {
+			if recoup_keys.contains(&key.as_str()) {
+				count += 1;
+			}
+		}
+		if count != 0 && count != recoup_keys.len() {
+			panic!("Invalid (partial) recoupments fields. Path: {path}");
+		}
+	}
 	pub fn validate(&self) -> Result<()> {
 		let mut total_recoup = BigDecimal::from(0);
 		let mut total_expenses = BigDecimal::from(0);
@@ -239,6 +264,7 @@ impl RecoupmentManifest {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RecoupableCost {
 	pub date: String,
 	pub expense: BigDecimal,
